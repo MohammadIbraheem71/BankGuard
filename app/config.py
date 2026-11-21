@@ -1,0 +1,46 @@
+"""Mode enum and environment-backed settings. Owner: Ibraheem.
+
+LLM temperature is deliberately not configurable: CONTRACT.md fixes it at 0.
+"""
+from __future__ import annotations
+
+import os
+from enum import Enum
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+class Mode(str, Enum):
+    """The three comparable gateway configurations from CONTRACT.md."""
+
+    baseline = "baseline"
+    detector_only = "detector_only"
+    full = "full"
+
+
+class Settings:
+    """Simple container for values read from the environment / .env file."""
+
+    def __init__(self) -> None:
+        self.llm_provider: str = os.getenv("LLM_PROVIDER", "mock")
+        self.llm_model: str = os.getenv("LLM_MODEL", "mock-chat")
+        self.db_path: str = os.getenv("DB_PATH", "data/bankguard.db")
+        self.secret_key: str = os.getenv("SECRET_KEY", "dev-only-secret-do-not-use-in-production")
+        self.llm_temperature: float = 0.0  # fixed by CONTRACT.md; never read from .env
+        self.openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+        self.anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY")
+        self.google_api_key: str | None = os.getenv("GOOGLE_API_KEY")
+        self.groq_api_key: str | None = os.getenv("GROQ_API_KEY")
+        self.ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
+def load_settings() -> Settings:
+    """Load .env from the repository root, then build the settings object."""
+    load_dotenv(BASE_DIR / ".env")
+    return Settings()
+
+
+settings = load_settings()

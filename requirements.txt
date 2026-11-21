@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pydantic>=2
+python-dotenv
+httpx
+langchain
+langchain-core
+langchain-openai
+langchain-anthropic
+langchain-google-genai
+langchain-groq
+langchain-ollama
+streamlit
+pandas
+matplotlib
+pytest
