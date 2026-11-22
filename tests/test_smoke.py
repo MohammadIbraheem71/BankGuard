@@ -79,7 +79,7 @@ def test_chat_returns_chat_response_in_each_mode(mode: Mode) -> None:
     )
     assert isinstance(response, ChatResponse)
     assert response.blocked is False
-    assert response.reply.startswith("[mock:")
+    assert response.reply.startswith("[mock]")
     assert response.latency_ms >= 0.0
     assert response.detection is None or response.detection.flagged is False
 

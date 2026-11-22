@@ -176,6 +176,48 @@ def _account_id(text: str, default: int | None) -> int | None:
     return int(match.group(1)) if match else default
 
 
+_FAQ_MARKERS = (
+    "fee", "limit", "hours", "card", "password", "branch", "faq",
+    "how do i", "guide", "statement",
+)
+_TRANSFER_VERB = r"(?:transfer|send|move|pay)"
+_AMOUNT = r"\d+(?:\.\d{1,2})?"
+
+
+def _is_faq_question(text: str) -> bool:
+    """FAQ wording wins over the bare word 'transfer' (e.g. 'transfer limits')."""
+    return any(marker in text for marker in _FAQ_MARKERS)
+
+
+def _is_transfer_request(text: str) -> bool:
+    """Only an imperative transfer verb plus an explicit amount is a request."""
+    return bool(
+        re.search(rf"\b{_TRANSFER_VERB}\b", text)
+        and re.search(rf"\b{_AMOUNT}\b", text)
+    )
+
+
+def _transfer_args(text: str, default_account: int | None) -> tuple[int | None, str, float]:
+    """Parse source account, destination reference and amount separately."""
+    source = default_account
+    from_match = re.search(r"\bfrom\b(?P<between>[^,]*?)\b(?P<id>\d{4})\b", text)
+    if from_match:
+        source = int(from_match.group("id"))
+
+    to_parts = re.split(r"\bto\b", text, maxsplit=1)
+    destination = to_parts[1].strip() if len(to_parts) > 1 else ""
+    dest_match = re.match(r"(?:account\s+)?(?P<id>\d{4})\b", destination)
+    if dest_match:
+        reference = dest_match.group("id")
+    else:
+        ref_match = re.match(r"([a-z0-9\-]+)", destination)
+        reference = ref_match.group(1).upper() if ref_match else "EXTERNAL-REF"
+
+    amount_match = re.search(rf"\b{_TRANSFER_VERB}\b[^0-9]*(?P<amount>{_AMOUNT})", text)
+    amount = float(amount_match.group("amount")) if amount_match else 100.0
+    return source, reference, amount
+
+
 def _mock_agent_output(
     user: User,
     message: str,
@@ -212,25 +254,23 @@ def _mock_agent_output(
             run("create_transfer", {"from_account_id": target, "to_account_ref": ref, "amount": amount})
         else:
             run("get_balance", {"account_id": target})
-    elif "transfer" in text:
-        match = re.search(r"transfer\s+(?:pkr\s+)?(\d+(?:\.\d{1,2})?)\s+to\s+([a-z0-9\-]+)", text)
-        amount = float(match.group(1)) if match else 100.0
-        ref = match.group(2).upper() if match else "EXTERNAL-REF"
+    elif _is_faq_question(text):
+        run("search_faq", {"query": message})
+    elif _is_transfer_request(text):
+        source, reference, amount = _transfer_args(text, default_account)
         run("create_transfer", {
-            "from_account_id": _account_id(text, default_account),
-            "to_account_ref": ref,
+            "from_account_id": source,
+            "to_account_ref": reference,
             "amount": amount,
         })
     elif "transaction" in text:
         run("get_transactions", {"account_id": _account_id(text, default_account), "limit": 10})
     elif "balance" in text:
         run("get_balance", {"account_id": _account_id(text, default_account)})
-    elif any(word in text for word in ("fee", "limit", "hours", "card", "password", "faq", "branch")):
-        run("search_faq", {"query": message})
 
     if not executed:
         return AgentOutput(
-            reply=f"[mock:{settings.llm_model}] I can help with balances, transactions, transfers and FAQs.",
+            reply="[mock] I can help with balances, transactions, transfers and FAQs.",
             tool_calls=[],
         )
 
@@ -254,7 +294,7 @@ def _mock_agent_output(
             titles = [doc["title"] for doc in result.data.get("docs", [])]
             parts.append("FAQ matches: " + ", ".join(titles))
     return AgentOutput(
-        reply=f"[mock:{settings.llm_model}] " + " ".join(parts),
+        reply="[mock] " + " ".join(parts),
         tool_calls=[call for call, _ in executed],
     )
 

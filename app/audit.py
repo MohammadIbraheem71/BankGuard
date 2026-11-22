@@ -30,15 +30,27 @@ def tool_context(user_id: int, mode: str) -> Iterator[None]:
         _current_mode.reset(mode_token)
 
 
+def _account_owner(conn, args: dict) -> int | None:
+    """Fall back to the owner of the source account when no context is set."""
+    account_id = args.get("from_account_id") or args.get("account_id")
+    if account_id is None:
+        return None
+    row = conn.execute("SELECT user_id FROM accounts WHERE id = ?", (account_id,)).fetchone()
+    return row["user_id"] if row is not None else None
+
+
 def record_tool_call(name: str, args: dict, ok: bool) -> None:
     """Append one row to audit_log for a tool call that was actually executed."""
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     conn = db.get_conn()
     try:
+        user_id = _current_user_id.get()
+        if user_id is None:
+            user_id = _account_owner(conn, args)
         conn.execute(
             "INSERT INTO audit_log (ts, user_id, mode, tool_name, args_json, ok) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (ts, _current_user_id.get(), _current_mode.get(), name, json.dumps(args, sort_keys=True), int(ok)),
+            (ts, user_id, _current_mode.get(), name, json.dumps(args, sort_keys=True), int(ok)),
         )
         conn.commit()
     finally:
