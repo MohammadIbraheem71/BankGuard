@@ -73,9 +73,8 @@ def _run_pipeline(user: User, req: ChatRequest, mode: Mode, started: float) -> C
     reply = "Blocked by BankGuard security policy."
     docs: list[Doc] = []
 
-    # STEP 1 — DOCUMENT RETRIEVAL (full only).
-    if mode == Mode.full:
-        docs = retrieval.search(req.message)
+    # STEP 1 — DOCUMENT RETRIEVAL (all modes; RAG is part of the baseline).
+    docs = retrieval.search(req.message)
 
     # STEP 2 — USER-MESSAGE INSPECTION (detector_only and full).
     if mode in (Mode.detector_only, Mode.full):
