@@ -1,15 +1,23 @@
 """Raw banking tools with NO authorization. Owner: Ibraheem.
 
 These tools intentionally trust the account id supplied by the caller; the
-security checks live in the gateway / app/security, not here.
-TODO(ibraheem): harden amount decimal validation before the final demo.
+policy engine (app/security/policy.py) is responsible for authorization.
+Every call that reaches execution writes exactly one audit_log row, which is
+the ground truth used by the eval harness.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
 from . import db
+from .audit import record_tool_call
 from .models import ToolResult
+
+
+def _record(name: str, args: dict, result: ToolResult) -> ToolResult:
+    """Stamp the audit row for one executed call and return the result."""
+    record_tool_call(name, args, result.ok)
+    return result
 
 
 def get_balance(account_id: int) -> ToolResult:
@@ -20,8 +28,13 @@ def get_balance(account_id: int) -> ToolResult:
     finally:
         conn.close()
     if row is None:
-        return ToolResult(ok=False, data={}, error="Account not found")
-    return ToolResult(ok=True, data={"account_id": row["id"], "balance": row["balance"]}, error=None)
+        return _record("get_balance", {"account_id": account_id},
+                       ToolResult(ok=False, data={}, error="Account not found"))
+    return _record(
+        "get_balance",
+        {"account_id": account_id},
+        ToolResult(ok=True, data={"account_id": row["id"], "balance": row["balance"]}, error=None),
+    )
 
 
 def get_transactions(account_id: int, limit: int = 10) -> ToolResult:
@@ -39,13 +52,23 @@ def get_transactions(account_id: int, limit: int = 10) -> ToolResult:
         {"id": row["id"], "ts": row["ts"], "description": row["description"], "amount": row["amount"]}
         for row in rows
     ]
-    return ToolResult(ok=True, data={"account_id": account_id, "transactions": transactions}, error=None)
+    return _record(
+        "get_transactions",
+        {"account_id": account_id, "limit": limit},
+        ToolResult(ok=True, data={"account_id": account_id, "transactions": transactions}, error=None),
+    )
 
 
 def execute_transfer(from_account_id: int, to_account_ref: str, amount: float) -> ToolResult:
     """Move PKR between a raw account id and an external reference, no auth."""
+    args = {
+        "from_account_id": from_account_id,
+        "to_account_ref": to_account_ref,
+        "amount": amount,
+    }
     if amount <= 0 or round(amount, 2) != amount:
-        return ToolResult(ok=False, data={}, error="Amount must be positive with at most 2 decimals")
+        return _record("create_transfer", args,
+                       ToolResult(ok=False, data={}, error="Amount must be positive with at most 2 decimals"))
     conn = db.get_conn()
     try:
         conn.execute("BEGIN")
@@ -54,10 +77,12 @@ def execute_transfer(from_account_id: int, to_account_ref: str, amount: float) -
         ).fetchone()
         if account is None:
             conn.rollback()
-            return ToolResult(ok=False, data={}, error="Source account not found")
+            return _record("create_transfer", args,
+                           ToolResult(ok=False, data={}, error="Source account not found"))
         if account["balance"] < amount:
             conn.rollback()
-            return ToolResult(ok=False, data={}, error="Insufficient funds")
+            return _record("create_transfer", args,
+                           ToolResult(ok=False, data={}, error="Insufficient funds"))
         new_balance = round(account["balance"] - amount, 2)
         ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         conn.execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, from_account_id))
@@ -66,15 +91,19 @@ def execute_transfer(from_account_id: int, to_account_ref: str, amount: float) -
             (from_account_id, ts, f"Transfer to {to_account_ref}", -amount),
         )
         conn.commit()
-        return ToolResult(
-            ok=True,
-            data={
-                "from_account_id": from_account_id,
-                "to_account_ref": to_account_ref,
-                "amount": amount,
-                "new_balance": new_balance,
-            },
-            error=None,
+        return _record(
+            "create_transfer",
+            args,
+            ToolResult(
+                ok=True,
+                data={
+                    "from_account_id": from_account_id,
+                    "to_account_ref": to_account_ref,
+                    "amount": amount,
+                    "new_balance": new_balance,
+                },
+                error=None,
+            ),
         )
     finally:
         conn.close()

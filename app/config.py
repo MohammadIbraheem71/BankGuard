@@ -25,7 +25,7 @@ class Settings:
     """Simple container for values read from the environment / .env file."""
 
     def __init__(self) -> None:
-        self.llm_provider: str = os.getenv("LLM_PROVIDER", "mock")
+        self.llm_provider: str = os.getenv("LLM_PROVIDER", "mock").strip().lower()
         self.llm_model: str = os.getenv("LLM_MODEL", "mock-chat")
         self.db_path: str = os.getenv("DB_PATH", "data/bankguard.db")
         self.secret_key: str = os.getenv("SECRET_KEY", "dev-only-secret-do-not-use-in-production")
