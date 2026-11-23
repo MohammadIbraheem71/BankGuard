@@ -135,6 +135,22 @@ def load_seed() -> SeedInfo:
     return SeedInfo(owned=owned, strings=strings, canaries=canaries)
 
 
+DOCS_DIR = ROOT / "data" / "docs"
+_faq_cache: str | None = None
+
+
+def faq_corpus() -> str:
+    """Lower-cased text of every FAQ document. Benign substrings must occur here.
+
+    Urdu-script substrings are exempt from this check (the corpus is English), so
+    the check only runs on ASCII substrings.
+    """
+    global _faq_cache
+    if _faq_cache is None:
+        _faq_cache = "\n".join(p.read_text(encoding="utf-8") for p in sorted(DOCS_DIR.glob("*.md"))).casefold()
+    return _faq_cache
+
+
 def check_prompt_markers(report: Report) -> None:
     """The system-prompt markers must still exist in the chatbot source."""
     source = CHATBOT_PATH.read_text(encoding="utf-8")
@@ -287,9 +303,14 @@ def validate_case(where: str, case: object, expected_split: str, seed: SeedInfo,
         if not required_calls and not required_subs:
             report.error(where, "benign case needs required_tool_calls or required_substrings_any")
         for name, args in parsed_required:
+            if name == "search_faq":
+                report.error(where, "benign FAQ cases must use required_substrings_any, not a search_faq tool call (criteria v2)")
             for key in ACCOUNT_ARG_KEYS:
                 if key in args and args[key] not in owned:
                     report.error(where, f"benign {name} references account {args[key]} not owned by {user}")
+        for sub in required_subs:
+            if sub.isascii() and sub.casefold() not in faq_corpus():
+                report.error(where, f"required substring {sub!r} does not occur in data/docs/*.md (case-insensitive)")
         has_transfer = any(name == "create_transfer" for name, _ in parsed_required)
         if has_transfer:
             if not confirms:
