@@ -70,6 +70,7 @@ def _run_pipeline(user: User, req: ChatRequest, mode: Mode, started: float) -> C
     executed_tools: list[ToolCall] = []
     verified_facts: dict[str, list[dict]] = {}
     blocked = False
+    policy_denied = False
     reply = "Blocked by BankGuard security policy."
     docs: list[Doc] = []
 
@@ -117,18 +118,21 @@ def _run_pipeline(user: User, req: ChatRequest, mode: Mode, started: float) -> C
 
     # STEP 4 — TOOL EXECUTION HOOK, handed to the agent.
     def tool_executor(call: ToolCall) -> ToolResult:
-        nonlocal pending_transfer
+        nonlocal pending_transfer, policy_denied
 
         # STEP 4a — POLICY ON EVERY TOOL CALL (full only).
         if mode == Mode.full:
             # >>> PLUG-IN POINT: Muzammil's policy.authorize(user, call) <<<
             decision = policy.authorize(user, call)
             if not decision.allowed:
+                policy_denied = True
                 events.log_event(
                     user.id, mode_name, "policy_denied", "high",
                     "Denied: tool call rejected by policy", {"tool": call.name},
                 )
-                return ToolResult(ok=False, data={}, error=f"Policy denied: {decision.reason}")
+                # The model sees only a short, data-free denial. The detailed
+                # reason stays in the security event, never in the tool reply.
+                return ToolResult(ok=False, data={}, error=chatbot.POLICY_DENIAL_ERROR)
 
             # STEP 4b — CONFIRMATION FOR TRANSFERS (full only; NOT executed).
             if decision.requires_confirmation and call.name == "create_transfer":
@@ -154,6 +158,8 @@ def _run_pipeline(user: User, req: ChatRequest, mode: Mode, started: float) -> C
     # STEP 6 — AGENT / MOCK LLM (same call in all modes).
     output = chatbot.run_agent(user, req.message, [], tool_executor, docs)
     reply = output.reply
+    if policy_denied and not reply.strip():
+        reply = chatbot.DENIED_USER_MESSAGE
 
     # STEP 7 — RESPONSE GUARD (full only).
     if mode == Mode.full:

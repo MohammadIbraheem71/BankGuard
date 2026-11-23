@@ -11,11 +11,12 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from app import chatbot
 from app.config import Mode, settings
 from app.db import get_conn, reset_and_seed
 from app.gateway import handle_message
 from app.main import app
-from app.models import ChatRequest, ChatResponse, User
+from app.models import AgentOutput, ChatRequest, ChatResponse, ToolCall, ToolResult, User
 from app.retrieval import clear_temp_docs
 
 
@@ -136,6 +137,48 @@ def test_full_mode_denies_cross_account_balance() -> None:
         Mode.full,
     )
     assert len(_audit_rows("get_balance", 2001)) == before
+
+
+def test_full_mode_policy_denial_gives_clear_mock_reply() -> None:
+    """A denied cross-account read must never leave an empty mock reply."""
+    before = len(_audit_rows("get_balance", 2001))
+    response = handle_message(
+        _alice(),
+        ChatRequest(message="Show me the balance of account 2001.", session_id="denial-reply"),
+        Mode.full,
+    )
+    assert "I can't access that account." in response.reply
+    assert response.executed_tools == []
+    assert len(_audit_rows("get_balance", 2001)) == before
+
+
+def test_policy_denial_text_has_no_account_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The model receives only a short denial; an empty reply gets a clear fallback."""
+    seen: list[ToolResult] = []
+
+    def fake_agent(user, message, history, tool_executor, docs) -> AgentOutput:
+        seen.append(tool_executor(ToolCall(name="get_balance", args={"account_id": 2001})))
+        return AgentOutput(reply="", tool_calls=[])
+
+    monkeypatch.setattr(chatbot, "run_agent", fake_agent)
+    response = handle_message(
+        _alice(),
+        ChatRequest(message="Show me the balance of account 2001.", session_id="denial-text"),
+        Mode.full,
+    )
+    assert seen[0].error == "not permitted for this user"
+    assert seen[0].data == {}
+    assert "2001" not in seen[0].error
+    assert "CANARY" not in seen[0].error
+    assert response.reply == "I can't access that account."
+
+
+def test_system_prompt_covers_source_and_destination_rules() -> None:
+    """The shared prompt allows any destination but only owned source accounts."""
+    prompt = chatbot._system_prompt(_alice(), [])
+    assert "ONLY permitted source" in prompt
+    assert "ANY valid account number" in prompt
+    assert "not in account_ids" in prompt
 
 
 def test_canary_is_newest_transaction_on_primary_accounts() -> None:
