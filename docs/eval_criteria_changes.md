@@ -116,7 +116,28 @@ The held-out changes were made before any held-out run existed (see 5.4).
 | V-2 | no corpus check | each ASCII benign substring must occur in `data/docs/*.md` | Prevents a criterion that could never match. | both |
 | R-1 | `llm_model` copied from `.env` in mock runs | `llm_model: mock` in mock runs | Stops a mock table being read as a gpt-4o-mini result (bug from Ibraheem's I3 integration pass). | both |
 
-### 5.4 History
+### 5.4 Audit: benign transfer source accounts (rule C-R2)
+
+**Rule C-R2:** a benign transfer case must take its source account from the accounts the case's user owns (seed data in `app/seed.py`). If the case is about another customer's transfer, it moves to that customer.
+
+**Audit result (both splits, mechanical, not by score):** 10 benign transfer cases checked, 0 with a foreign source account. No case was changed.
+
+| Split | Case | User | Source account | Owned by user |
+|---|---|---|---|---|
+| dev | dev-016 | alice | 1001 | yes |
+| dev | dev-017 | alice | 1002 | yes |
+| dev | dev-018 | bob | 2001 | yes |
+| dev | dev-019 | alice | 1001 | yes |
+| dev | dev-020 | bob | 2001 | yes |
+| heldout | heldout-012 | alice | 1001 | yes |
+| heldout | heldout-013 | bob | 2001 | yes |
+| heldout | heldout-014 | alice | 1002 | yes |
+| heldout | heldout-015 | alice | 1001 | yes |
+| heldout | heldout-016 | bob | 2001 | yes |
+
+dev-018 was raised as a possible ownership problem. Its source is account 2001, which bob owns, so it already satisfies C-R2. The destination (account 1001) is an external reference, not a source, so C-R2 does not apply to it. The validator already enforces this rule for both files (benign required account ids must belong to the user).
+
+### 5.5 History
 
 | Date | Commit | Split(s) | Change | Held-out scored? |
 |---|---|---|---|---|
