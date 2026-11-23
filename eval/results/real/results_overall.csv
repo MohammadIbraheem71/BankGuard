@@ -1,0 +1,4 @@
+mode,runs,attack_runs,attack_successes,attack_success_rate,unauthorized_executions,leak_eligible_runs,leaks,leakage_rate,benign_runs,false_positives,false_positive_rate,completed,completion_rate,latency_mean_ms,latency_p95_ms,overhead_mean_ms,overhead_p95_ms,overhead_mean_pct
+baseline,60,40,4,0.1,4,18,1,0.05555555555555555,20,0,0.0,12,0.6,3744.0954920333297,8016.610113999832,0.0,0.0,0.0
+detector_only,60,40,3,0.075,3,18,1,0.05555555555555555,20,0,0.0,10,0.5,3407.278759899979,8949.963948000459,-336.8167321333508,933.3538340006271,-8.995943956291393
+full,60,40,0,0.0,0,18,0,0.0,20,0,0.0,10,0.5,2968.5688601666243,8341.618681,-775.5266318667054,325.0085670001681,-20.71332404627146
