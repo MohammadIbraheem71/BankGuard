@@ -7,6 +7,7 @@ per executed call. No contract function signature is changed by this module.
 from __future__ import annotations
 
 import json
+import sqlite3
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -39,19 +40,24 @@ def _account_owner(conn, args: dict) -> int | None:
     return row["user_id"] if row is not None else None
 
 
+def _insert_tool_call(conn: sqlite3.Connection, name: str, args: dict, ok: bool) -> None:
+    """Write one audit row in the caller's transaction."""
+    ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    user_id = _current_user_id.get()
+    if user_id is None:
+        user_id = _account_owner(conn, args)
+    conn.execute(
+        "INSERT INTO audit_log (ts, user_id, mode, tool_name, args_json, ok) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (ts, user_id, _current_mode.get(), name, json.dumps(args, sort_keys=True), int(ok)),
+    )
+
+
 def record_tool_call(name: str, args: dict, ok: bool) -> None:
     """Append one row to audit_log for a tool call that was actually executed."""
-    ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     conn = db.get_conn()
     try:
-        user_id = _current_user_id.get()
-        if user_id is None:
-            user_id = _account_owner(conn, args)
-        conn.execute(
-            "INSERT INTO audit_log (ts, user_id, mode, tool_name, args_json, ok) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (ts, user_id, _current_mode.get(), name, json.dumps(args, sort_keys=True), int(ok)),
-        )
+        _insert_tool_call(conn, name, args, ok)
         conn.commit()
     finally:
         conn.close()

@@ -7,10 +7,14 @@ the ground truth used by the eval harness.
 """
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing, contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
+from typing import Iterator
 
 from . import db
-from .audit import record_tool_call
+from .audit import _insert_tool_call, record_tool_call
 from .models import ToolResult
 
 
@@ -59,6 +63,23 @@ def get_transactions(account_id: int, limit: int = 10) -> ToolResult:
     )
 
 
+_transfer_connection: ContextVar[sqlite3.Connection | None] = ContextVar(
+    "bankguard_transfer_connection", default=None,
+)
+
+
+@contextmanager
+def transfer_transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """Use the caller's open write transaction for transfers and their audit rows."""
+    if not conn.in_transaction or _transfer_connection.get() is not None:
+        raise RuntimeError("Transfer requires one active caller transaction.")
+    token = _transfer_connection.set(conn)
+    try:
+        yield
+    finally:
+        _transfer_connection.reset(token)
+
+
 def execute_transfer(from_account_id: int, to_account_ref: str, amount: float) -> ToolResult:
     """Move PKR between a raw account id and an external reference, no auth."""
     args = {
@@ -66,44 +87,47 @@ def execute_transfer(from_account_id: int, to_account_ref: str, amount: float) -
         "to_account_ref": to_account_ref,
         "amount": amount,
     }
+    conn = _transfer_connection.get()
+    if conn is not None:
+        return _run_transfer(conn, args)
+    with closing(db.get_conn()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
+        return _run_transfer(conn, args)
+
+
+def _run_transfer(conn: sqlite3.Connection, args: dict) -> ToolResult:
+    result = _apply_transfer(conn, **args)
+    _insert_tool_call(conn, "create_transfer", args, result.ok)
+    return result
+
+
+def _apply_transfer(
+    conn: sqlite3.Connection, from_account_id: int, to_account_ref: str, amount: float,
+) -> ToolResult:
     if amount <= 0 or round(amount, 2) != amount:
-        return _record("create_transfer", args,
-                       ToolResult(ok=False, data={}, error="Amount must be positive with at most 2 decimals"))
-    conn = db.get_conn()
-    try:
-        conn.execute("BEGIN")
-        account = conn.execute(
-            "SELECT balance FROM accounts WHERE id = ?", (from_account_id,)
-        ).fetchone()
-        if account is None:
-            conn.rollback()
-            return _record("create_transfer", args,
-                           ToolResult(ok=False, data={}, error="Source account not found"))
-        if account["balance"] < amount:
-            conn.rollback()
-            return _record("create_transfer", args,
-                           ToolResult(ok=False, data={}, error="Insufficient funds"))
-        new_balance = round(account["balance"] - amount, 2)
-        ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        conn.execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, from_account_id))
-        conn.execute(
-            "INSERT INTO transactions (account_id, ts, description, amount) VALUES (?, ?, ?, ?)",
-            (from_account_id, ts, f"Transfer to {to_account_ref}", -amount),
-        )
-        conn.commit()
-        return _record(
-            "create_transfer",
-            args,
-            ToolResult(
-                ok=True,
-                data={
-                    "from_account_id": from_account_id,
-                    "to_account_ref": to_account_ref,
-                    "amount": amount,
-                    "new_balance": new_balance,
-                },
-                error=None,
-            ),
-        )
-    finally:
-        conn.close()
+        return ToolResult(ok=False, data={}, error="Amount must be positive with at most 2 decimals")
+    account = conn.execute(
+        "SELECT balance FROM accounts WHERE id = ?", (from_account_id,)
+    ).fetchone()
+    if account is None:
+        return ToolResult(ok=False, data={}, error="Source account not found")
+    if account["balance"] < amount:
+        return ToolResult(ok=False, data={}, error="Insufficient funds")
+
+    new_balance = round(account["balance"] - amount, 2)
+    ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    conn.execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, from_account_id))
+    conn.execute(
+        "INSERT INTO transactions (account_id, ts, description, amount) VALUES (?, ?, ?, ?)",
+        (from_account_id, ts, f"Transfer to {to_account_ref}", -amount),
+    )
+    return ToolResult(
+        ok=True,
+        data={
+            "from_account_id": from_account_id,
+            "to_account_ref": to_account_ref,
+            "amount": amount,
+            "new_balance": new_balance,
+        },
+        error=None,
+    )
