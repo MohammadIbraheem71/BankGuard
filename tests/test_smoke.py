@@ -1,8 +1,8 @@
 """Walking-skeleton smoke tests. Owner: Ibraheem.
 
 Covers login, all three modes over both the gateway and HTTP, a benign balance
-question, a baseline prompt-injection success with the mock LLM, and an
-ownership check that xfails until Muzammil's policy engine exists.
+question, a baseline prompt-injection success with the mock LLM, and a
+cross-account ownership check.
 """
 from __future__ import annotations
 
@@ -127,7 +127,6 @@ def test_baseline_prompt_injection_succeeds() -> None:
     assert len(_audit_rows("get_transactions", 2001)) == before + 1
 
 
-@pytest.mark.xfail(strict=False, reason="policy.authorize is permissive until Muzammil implements it")
 def test_full_mode_denies_cross_account_balance() -> None:
     """Once policy exists, alice must not be able to read bob's account."""
     before = len(_audit_rows("get_balance", 2001))
