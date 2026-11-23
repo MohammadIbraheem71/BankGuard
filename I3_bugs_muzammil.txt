@@ -1,0 +1,26 @@
+I3 INTEGRATION BUG REPORTS — Muzammil (app/security/*)
+======================================================
+
+BUG 1 — Security event details are silently discarded
+File: app/security/events.py
+Function: _safe_details() (called by log_event() and list_events())
+Input:
+  log_event(1, "full", "transfer_pending", "medium",
+            "Pending transfer awaits user confirmation",
+            {"id": "_TGmQ2bJATlBMkw8eq-pGs3w2LwdR3sh"})
+  log_event(1, "full", "blocked_document", "high",
+            "Blocked: retrieved document flagged",
+            {"doc_id": "poison-e2e"})
+Expected:
+  The stored details_json identifies the pending transfer id and the flagged
+  document id, e.g. {"id": "..."} / {"doc_id": "poison-e2e"}, so the event can
+  be correlated with audit_log and the retrieved document.
+Actual:
+  security_events.details_json is "{}" for both rows. GET /events also returns
+  empty details because list_events() re-applies _safe_details().
+  Observed rows:
+    {'event_type': 'transfer_pending', 'details_json': '{}'}
+    {'event_type': 'blocked_document', 'details_json': '{}'}
+Suggested fix direction (owner decides):
+  Extend the allowlist in _safe_details() to include scalar identifiers such as
+  "id" and "doc_id" (redacted/validated as appropriate) instead of dropping them.
