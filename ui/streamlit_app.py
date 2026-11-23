@@ -11,14 +11,16 @@ Demo logins are synthetic: alice / alice123 and bob / bob123.
 """
 from __future__ import annotations
 
-import os
+import sys
 import uuid
+from pathlib import Path
 
-import httpx
 import streamlit as st
 
-API_URL = os.getenv("BANKGUARD_API_URL", "http://127.0.0.1:8000").rstrip("/")
-REQUEST_TIMEOUT = 60.0
+# Streamlit adds this script's folder to sys.path; keep it explicit for other runners.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from api import API_URL, call, log_in  # noqa: E402
+
 MODES = ("baseline", "detector_only", "full")
 MODE_HELP = {
     "baseline": "LLM plus tools, no security checks (intentionally vulnerable).",
@@ -26,31 +28,6 @@ MODE_HELP = {
     "full": "Detector on messages and documents, policy on every tool call, "
             "transfer confirmation, response guard and event logging.",
 }
-
-
-def call(method: str, path: str, *, json: dict | None = None,
-         params: dict | None = None) -> tuple[object | None, str | None]:
-    """Call the backend. Returns (parsed JSON, None) or (None, user-facing error)."""
-    headers = {}
-    token = st.session_state.get("token")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        response = httpx.request(method, f"{API_URL}{path}", headers=headers,
-                                 json=json, params=params, timeout=REQUEST_TIMEOUT)
-    except httpx.HTTPError as exc:
-        return None, f"Cannot reach the BankGuard API at {API_URL} ({exc.__class__.__name__})."
-
-    if response.status_code == 401 and token:
-        st.session_state.token = None
-        return None, "Your session has expired. Please log in again."
-    if response.status_code >= 400:
-        try:
-            detail = response.json().get("detail", response.text)
-        except ValueError:
-            detail = response.text
-        return None, f"Request failed ({response.status_code}): {detail}"
-    return response.json(), None
 
 
 def init_state() -> None:
@@ -67,19 +44,11 @@ def init_state() -> None:
         st.session_state.setdefault(key, value)
 
 
-def log_in(username: str, password: str) -> None:
-    """POST /login, then GET /me to show the signed-in customer."""
-    data, error = call("POST", "/login", json={"username": username, "password": password})
+def _log_in_and_rerun(username: str, password: str) -> None:
+    error = log_in(username, password)
     if error:
         st.error(error)
         return
-    st.session_state.token = data["token"]
-    me, error = call("GET", "/me")
-    if error:
-        st.session_state.token = None
-        st.error(error)
-        return
-    st.session_state.username = me["username"]
     st.rerun()
 
 
@@ -100,7 +69,7 @@ def render_login() -> None:
         password = st.text_input("Password", type="password", autocomplete="current-password")
         submitted = st.form_submit_button("Log in", type="primary")
     if submitted:
-        log_in(username.strip(), password)
+        _log_in_and_rerun(username.strip(), password)
 
 
 def render_sidebar() -> None:
@@ -110,12 +79,12 @@ def render_sidebar() -> None:
         st.selectbox("Mode", MODES, key="mode", help="Gateway configuration for each message.")
         st.caption(MODE_HELP[st.session_state.mode])
         st.divider()
-        if st.button("Clear conversation", use_container_width=True):
+        if st.button("Clear conversation", width="stretch"):
             st.session_state.messages = []
             st.session_state.session_id = uuid.uuid4().hex
             st.session_state.pending = None
             st.rerun()
-        if st.button("Log out", use_container_width=True):
+        if st.button("Log out", width="stretch"):
             log_out()
             st.rerun()
         st.divider()
@@ -188,10 +157,10 @@ def render_pending_card() -> None:
         st.markdown(f"**Amount:** PKR {pending['amount']:.2f}")
         st.caption(f"Pending transfer ID: {pending['id']}. Nothing moves until you confirm.")
         col_confirm, col_cancel = st.columns(2)
-        col_confirm.button("Confirm transfer", type="primary", use_container_width=True,
+        col_confirm.button("Confirm transfer", type="primary", width="stretch",
                            key=f"confirm-{pending['id']}",
                            on_click=resolve_pending, args=("confirm",))
-        col_cancel.button("Cancel", use_container_width=True,
+        col_cancel.button("Cancel", width="stretch",
                           key=f"cancel-{pending['id']}",
                           on_click=resolve_pending, args=("cancel",))
 
