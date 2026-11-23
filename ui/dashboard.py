@@ -117,17 +117,25 @@ def render_events_panel() -> None:
 
 # ------------------------------------------------------------ comparison
 
-def _results_provider() -> str | None:
-    md = RESULTS_DIR / "results.md"
+def available_result_sets() -> list[str]:
+    """Result folders under eval/results/ that hold a metrics CSV (real first)."""
+    names = [p.name for p in RESULTS_DIR.iterdir()
+             if p.is_dir() and (p / "results_overall.csv").exists()] if RESULTS_DIR.exists() else []
+    return sorted(names, key=lambda n: (n != "real", n))
+
+
+def _results_header(folder: Path) -> tuple[str | None, str | None]:
+    """(provider, model) from the header line that eval/metrics.py writes into results.md."""
+    md = folder / "results.md"
     if not md.exists():
-        return None
-    match = re.search(r"llm_provider: `([^`]+)`", md.read_text(encoding="utf-8"))
-    return match.group(1) if match else None
+        return None, None
+    match = re.search(r"llm_provider: `([^`]+)` model: `([^`]+)`", md.read_text(encoding="utf-8"))
+    return (match.group(1), match.group(2)) if match else (None, None)
 
 
-def load_results() -> tuple[pd.DataFrame | None, pd.DataFrame | None, str | None]:
-    overall_path = RESULTS_DIR / "results_overall.csv"
-    category_path = RESULTS_DIR / "results_by_category.csv"
+def load_results(folder: Path) -> tuple[pd.DataFrame | None, pd.DataFrame | None, str | None]:
+    overall_path = folder / "results_overall.csv"
+    category_path = folder / "results_by_category.csv"
     if not overall_path.exists() or not category_path.exists():
         return None, None, None
     overall = pd.read_csv(overall_path)
@@ -148,15 +156,23 @@ def _format(key: str, value) -> str:
 
 def render_comparison_panel() -> None:
     st.header("Evaluation: baseline vs detector_only vs full")
-    overall, by_category, stamp = load_results()
-    if overall is None:
+    sets = available_result_sets()
+    if not sets:
         st.info("No results yet. Run `python -m eval.run_eval --split dev` and then "
-                "`python -m eval.metrics eval/results/raw/<file>.json`.")
+                "`python -m eval.metrics eval/results/raw/<file>.json --out-dir eval/results/<name>`.")
+        return
+    choice = st.radio("Results set", sets, horizontal=True, key="results_set",
+                      help="real = real LLM run; mock = offline harness check")
+    folder = RESULTS_DIR / choice
+    overall, by_category, stamp = load_results(folder)
+    if overall is None:
+        st.error(f"eval/results/{choice}/ is missing results_overall.csv or results_by_category.csv.")
         return
 
-    provider = _results_provider()
-    st.caption(f"Latest results written {stamp} (eval/results/). LLM provider: `{provider or 'unknown'}`.")
-    if provider == "mock":
+    provider, model = _results_header(folder)
+    st.caption(f"Latest results written {stamp} (eval/results/{choice}/). "
+               f"LLM provider: `{provider or 'unknown'}`, model: `{model or 'unknown'}`.")
+    if provider == "mock" or model == "mock":
         st.warning("These results come from the mock model. They test the harness only and "
                    "are not a measure of a real model.")
 

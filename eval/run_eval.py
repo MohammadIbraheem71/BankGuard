@@ -250,7 +250,8 @@ def main(argv: list[str] | None = None) -> int:
         "modes": modes,
         "repeat": args.repeat,
         "llm_provider": settings.llm_provider,
-        "llm_model": settings.llm_model,
+        # A mock run must never be labelled with the model name from .env (criteria v2).
+        "llm_model": "mock" if settings.llm_provider == "mock" else settings.llm_model,
         "case_count": len(cases),
         "elapsed_s": round(time.perf_counter() - started, 1),
     }
