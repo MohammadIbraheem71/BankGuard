@@ -44,7 +44,7 @@ _RULES = (
             r"\b(?:i\s+am|i['’]m)\s+(?:(?:the|an?|your)\s+)?"
             r"(?:admin(?:istrator)?|(?:bank\s+)?manager|bank\s+staff|developer)\b"
             r"|\bas\s+your\s+(?:developer|administrator)\b"
-            r"|(?:^|[.!?]\s+|\[|<)system\s*(?::|\]|>)"
+            r"|(?:^|[.!?]\s+|^#{1,6}\s+|\[|<)system\s*(?::|\]|>)"
             r"|\b(?:main|mein|mai)\s+(?:bank\s+(?:ka\s+)?)?(?:admin|manager)\s+(?:hoon|hun)\b"
             r"|میں\s+(?:بینک\s+(?:کا\s+)?)?(?:منیجر|ایڈمن)\s+ہوں"
         ),
@@ -56,6 +56,8 @@ _RULES = (
         re.compile(
             r"\b(?:show|list|reveal|print|dump|export|disclose|give\s+me)\s+"
             r"(?:me\s+)?(?:(?:all|every)\s+(?:(?:bank|customer)\s+)?accounts?\b"
+            r"(?!\s+(?:(?:that\s+)?i\s+own|(?:in|under)\s+my\s+name|"
+            r"(?:linked|registered|belonging)\s+to\s+(?:my\s+profile|me))\s*[.?!]?$)"
             r"|(?:other|all)\s+customers?(?:['’]s?)?\b"
             r"|(?:another|other)\s+(?:user|customer)s?['’]?s?\s+(?:account|transactions?|balance|data)\b"
             r"|(?:your|the|hidden|internal)\s+(?:(?:hidden|internal)\s+)?"
