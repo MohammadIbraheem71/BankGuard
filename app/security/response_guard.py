@@ -54,31 +54,13 @@ def _identifier_pattern(value: str) -> re.Pattern[str]:
     return re.compile(rf"(?<![\w@]){re.escape(value)}(?![\w@])", re.IGNORECASE)
 
 
-def _masked(value: str) -> str:
-    digits = re.sub(r"\D", "", value)
-    suffix = digits[-4:] if len(digits) >= 4 else value[-4:]
-    return f"****{suffix}"
-
-
-def _protected_identifiers(user_id: int) -> tuple[list[str], list[str]]:
+def _other_customer_identifiers(user_id: int) -> list[str]:
     with closing(db.get_conn()) as conn:
-        users = conn.execute("SELECT id, cnic, phone, email FROM users").fetchall()
-        accounts = conn.execute("SELECT user_id, account_number FROM accounts").fetchall()
-
-    others: list[str] = []
-    own: list[str] = []
-    for row in users:
-        if row["id"] == user_id:
-            own.append(row["cnic"])
-        else:
-            others.extend((row["cnic"], row["phone"], row["email"]))
-    for row in accounts:
-        values = own if row["user_id"] == user_id else others
-        values.append(row["account_number"])
-    return (
-        sorted(set(others) - {""}, key=len, reverse=True),
-        sorted(set(own) - {""}, key=len, reverse=True),
-    )
+        users = conn.execute("SELECT cnic, phone, email FROM users WHERE id <> ?", (user_id,))
+        values = {value for row in users for value in row if value}
+        accounts = conn.execute("SELECT account_number FROM accounts WHERE user_id <> ?", (user_id,))
+        values.update(row[0] for row in accounts if row[0])
+    return sorted(values, key=len, reverse=True)
 
 
 def _decimal(value) -> Decimal | None:
@@ -127,6 +109,7 @@ def _verified_transaction_canaries(user: User, facts: dict) -> set[str]:
         if result.get("account_id") in user.account_ids
         for transaction in result.get("transactions", ())
         for match in _CANARY.finditer(transaction.get("description", ""))
+        if match.group().casefold().rpartition("-")[0] == f"canary-{user.username.casefold()}"
     }
 
 
@@ -149,17 +132,11 @@ def check(user: User, text: str, verified_facts: dict | None = None) -> GuardRes
         text = _CANARY.sub("[redacted]", text)
         findings.append("canary")
 
-    others, own = _protected_identifiers(user.id)
-    for values, finding, mask in (
-        (others, "other_customer_identifier", False),
-        (own, "masked_customer_identifier", True),
-    ):
-        for value in values:
-            replacement = _masked(value) if mask else "[redacted]"
-            text, count = _identifier_pattern(value).subn(lambda _: replacement, text)
-            if count:
-                unsafe = True
-                if finding not in findings:
-                    findings.append(finding)
+    for value in _other_customer_identifiers(user.id):
+        text, count = _identifier_pattern(value).subn("[redacted]", text)
+        if count:
+            unsafe = True
+            if "other_customer_identifier" not in findings:
+                findings.append("other_customer_identifier")
 
     return GuardResult(safe=not unsafe, text=text, findings=findings)

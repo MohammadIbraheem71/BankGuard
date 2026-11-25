@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import math
+import re
 from contextlib import closing
 from datetime import datetime, timezone
 from typing import get_args
@@ -31,6 +33,23 @@ _CATEGORIES = frozenset({
 _LIST_FIELDS = {"categories": _CATEGORIES, "tools": _TOOLS, "findings": FINDINGS}
 
 
+_ID_FIELDS = ("id", "doc_id", "pending_id", "account_id")
+_ID_SYNTAX = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
+# Long digit sequences can identify phones and CNICs, including formatted ones.
+_PRIVATE_DIGITS = re.compile(r"[0-9](?:[_.:-]*[0-9]){6,}")
+
+
+def _safe_identifier(value) -> bool:
+    if type(value) is int:
+        # A long numeric identifier cannot be distinguished from personal data.
+        return abs(value) < 1_000_000
+    if type(value) is float:
+        return (math.isfinite(value) and abs(value) < 1_000_000
+                and not _PRIVATE_DIGITS.search(str(value)))
+    return (isinstance(value, str) and _ID_SYNTAX.fullmatch(value) is not None
+            and "canary-" not in value.casefold() and not _PRIVATE_DIGITS.search(value))
+
+
 def _event_type(value: str) -> str:
     return value if value in _SUMMARIES else "security_event"
 
@@ -44,9 +63,14 @@ def _safe_details(details) -> dict:
         values = details.get(key)
         if isinstance(values, list):
             safe[key] = [value for value in values if isinstance(value, str) and value in allowed]
-    tool = details.get("tool")
-    if isinstance(tool, str) and tool in _TOOLS:
-        safe["tool"] = tool
+    for key in _ID_FIELDS:
+        value = details.get(key)
+        if _safe_identifier(value):
+            safe[key] = value
+    for key, allowed in (("tool", _TOOLS), ("tool_name", _TOOLS), ("category", _CATEGORIES)):
+        value = details.get(key)
+        if isinstance(value, str) and value in allowed:
+            safe[key] = value
     blocked = details.get("blocked")
     if isinstance(blocked, bool):
         safe["blocked"] = blocked

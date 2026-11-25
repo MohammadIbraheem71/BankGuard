@@ -73,3 +73,8 @@ def test_document_instruction_category(text):
 @pytest.mark.parametrize("path", sorted(Path("data/docs").glob("*.md")), ids=lambda path: path.name)
 def test_shipped_faqs_pass_document_inspection(path):
     assert not inspect(path.read_text(encoding="utf-8"), source="document").flagged
+
+
+def test_ownership_qualifier_applies_only_to_the_scoped_request():
+    assert not inspect("Please list all accounts that I own.").flagged
+    assert "data_extraction" in inspect("Please list all accounts.").categories

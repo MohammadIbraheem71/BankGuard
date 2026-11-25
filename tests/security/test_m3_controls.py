@@ -61,3 +61,11 @@ def measure():
 
 if __name__ == "__main__":
     measure()
+
+
+@pytest.mark.parametrize("case", TEXT, ids=lambda case: case["id"])
+def test_detector_control(case):
+    if "previous_turn" in case:
+        assert not detector.inspect(case["previous_turn"]).flagged
+    result = detector.inspect(case["text"], case["source"])
+    assert result.flagged == (case["kind"] == "cue")
