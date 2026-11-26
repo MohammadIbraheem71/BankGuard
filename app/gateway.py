@@ -6,7 +6,9 @@ without changing this signature or the mode semantics from CONTRACT.md.
 """
 from __future__ import annotations
 
+import threading
 import time
+from collections import OrderedDict
 
 from . import bank_api, chatbot, retrieval
 from .audit import record_tool_call, tool_context
@@ -27,6 +29,49 @@ from .security import confirmation, detector, events, policy, response_guard
 def _mode_name(mode: Mode) -> str:
     """Normalize a Mode enum (or a raw string from a caller) to a log string."""
     return mode.value if isinstance(mode, Mode) else str(mode)
+
+
+# Session memory is intentionally process-local: it is a demo/eval aid, not a
+# durable chat store. One "turn" below is one completed user/assistant pair.
+MAX_SESSION_TURNS = 10
+MAX_SESSIONS = 1000
+_SESSION_LOCK = threading.Lock()
+_SESSIONS: "OrderedDict[tuple[int, str], list[list[dict]]]" = OrderedDict()
+
+
+def clear_sessions() -> None:
+    """Drop all in-memory conversation history (used by tests and reseeds)."""
+    with _SESSION_LOCK:
+        _SESSIONS.clear()
+
+
+def _history_snapshot(key: tuple[int, str]) -> list[dict]:
+    """Return a flat, detached copy of the session's most recent exchanges."""
+    with _SESSION_LOCK:
+        turns = _SESSIONS.get(key)
+        if turns is None:
+            return []
+        _SESSIONS.move_to_end(key)
+        history: list[dict] = []
+        for pair in turns[-MAX_SESSION_TURNS:]:
+            history.extend(dict(message) for message in pair)
+        return history
+
+
+def _remember_turn(key: tuple[int, str], message: str, reply: str) -> None:
+    """Store one non-blocked exchange; evict the oldest session if full."""
+    with _SESSION_LOCK:
+        if key not in _SESSIONS:
+            while len(_SESSIONS) >= MAX_SESSIONS:
+                _SESSIONS.popitem(last=False)
+        turns = _SESSIONS.setdefault(key, [])
+        turns.append([
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": reply},
+        ])
+        if len(turns) > MAX_SESSION_TURNS:
+            del turns[:-MAX_SESSION_TURNS]
+        _SESSIONS.move_to_end(key)
 
 
 def _dispatch(call: ToolCall) -> ToolResult:
@@ -73,6 +118,8 @@ def _run_pipeline(user: User, req: ChatRequest, mode: Mode, started: float) -> C
     policy_denied = False
     reply = "Blocked by BankGuard security policy."
     docs: list[Doc] = []
+    history_key = (user.id, req.session_id)
+    history = _history_snapshot(history_key)
 
     # STEP 1 — DOCUMENT RETRIEVAL (all modes; RAG is part of the baseline).
     docs = retrieval.search(req.message)
@@ -155,8 +202,8 @@ def _run_pipeline(user: User, req: ChatRequest, mode: Mode, started: float) -> C
             verified_facts.setdefault(call.name, []).append(result.data)
         return result
 
-    # STEP 6 — AGENT / MOCK LLM (same call in all modes).
-    output = chatbot.run_agent(user, req.message, [], tool_executor, docs)
+    # STEP 6 — AGENT / MOCK LLM (same call in all modes, same session history).
+    output = chatbot.run_agent(user, req.message, history, tool_executor, docs)
     reply = output.reply
     if policy_denied and not reply.strip():
         reply = chatbot.DENIED_USER_MESSAGE
@@ -180,6 +227,9 @@ def _run_pipeline(user: User, req: ChatRequest, mode: Mode, started: float) -> C
             user.id, mode_name, "chat_completed", "low", "Chat handled in full mode",
             {"blocked": blocked, "tools": [c.name for c in executed_tools]},
         )
+
+    if not blocked:
+        _remember_turn(history_key, req.message, reply)
 
     return ChatResponse(
         reply=reply,
