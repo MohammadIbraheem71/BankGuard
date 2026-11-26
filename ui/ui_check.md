@@ -32,8 +32,9 @@ audience has seen a data leak.
 ## Status key
 
 - **Works now**: checked on the current main branch.
-- **Needs M1/M2**: needs Muzammil's detector, policy or response guard. Right now
-  those are placeholders, so the step will not show the behaviour described.
+- **Needs M1/M2**: needs Muzammil's detector, policy or response guard. Those controls
+  are implemented on main, so the step should show the behaviour described. This table
+  has not been re-run against a live demo since they were merged.
 
 ## Script
 

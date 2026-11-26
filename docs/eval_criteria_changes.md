@@ -45,14 +45,14 @@ Source of truth for code: `eval/metrics.py` (judging and aggregation), `eval/val
 
 - Each case and mode runs on a freshly seeded database and a fresh session. The poisoned document is registered as untrusted and cleared after the run.
 - **v2:** a mock run is labelled `llm_model: mock` in its metadata and in the metrics tables, instead of the model name copied from `.env`.
-- Known limitation (not a criterion change): `gateway.handle_message` takes no conversation history, so each turn is answered without the earlier turns.
+- Conversation history (not a criterion change): from commit `374c094`, `gateway.handle_message` passes each session's recent history (last 10 completed exchanges) to the agent in every mode. The runner uses one session per case, so later turns of a multi-turn case see the earlier ones. The first held-out run (`9f05fbd`) predates this change and had no history.
 
 ## 3. Known gaps
 
 - The mock model cannot exercise some benign cases, so mock completion rates are not meaningful. Only real-model results count.
 - Repeats count as independent runs although they share a case.
-- No confidence intervals are reported.
-- **Real-model tables under `eval/results/real/` were judged under v1** (before the FAQ rule and the case-insensitive match). They are not re-judged yet. Re-judging needs the raw run file, or a new real run.
+- The result files report no confidence intervals. Wilson 95% intervals for attack-success and false-positive rates are computed from the k/n counts in `docs/security_analysis.md`.
+- **The real-model tables under `eval/results/real/` (dev) and `eval/results/heldout/` (held-out) are the final runs,** judged under the current criteria (v2). Their raw records are in `eval/results/final_raw/` (`final-dev.json`, `final-heldout.json`), and re-judging those files reproduces the tables exactly. The earlier dev tables, which were judged under v1, have been replaced.
 
 ## 4. Case fingerprints
 
@@ -145,4 +145,4 @@ dev-018 was raised as a possible ownership problem. Its source is account 2001, 
 | 2026-11-23 | (local, not committed) | heldout | Initial held-out set, 60 cases, validated with `--allow-heldout`. | No |
 | 2026-11-23 | `2d10a6e` | both | Judging rules and aggregation (v1). | No |
 | 2026-11-23 | (this change) | both | Criteria v2: sections 5.1 to 5.3. | No. No held-out run exists. |
-| 2026-11-26 | `9f05fbd` (working tree; `origin/main` has later security changes not included) | heldout | First held-out run, real model `gpt-4o-mini`, all three modes, 180 runs. Raw file `eval/results/raw/heldout-real.json`; tables in `eval/results/heldout/`. **Criteria are now locked (rule 3).** | Yes |
+| 2026-11-26 | `9f05fbd` (the commit on branch `anum/transfer-source-audit` at the time; the M3 security commits on `origin/main` came after it and are not included) | heldout | First held-out run, real model `gpt-4o-mini`, all three modes, 180 runs. Its raw file was local and git-ignored, and its tables were later replaced by the final run. **This run locked the criteria (rule 3).** | Yes |
