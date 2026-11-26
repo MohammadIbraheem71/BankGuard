@@ -8,7 +8,7 @@ This document describes the implementation as it exists in the repository. Every
 |---|---|---|
 | HTTP API | `app/main.py` | FastAPI app (`title="BankGuard"`, `version="0.1.0"`). Lifespan calls `db.init_db()`. Exposes exactly six routes: `POST /login`, `GET /me`, `POST /chat?mode=...`, `POST /transfers/{id}/confirm`, `POST /transfers/{id}/cancel`, `GET /events?mode=&limit=`. Authenticated routes resolve the bearer token through `auth.get_current_user`. |
 | Auth | `app/auth.py` | PBKDF2-SHA256 password hashing (`pbkdf2_sha256$iterations$salt_hex$hash_hex`, 200,000 iterations, 16-byte salt). HMAC-SHA256 bearer tokens with payload `{sub, exp}` and TTL 3600 seconds, signed with `settings.secret_key`. `get_current_user` expects `Authorization: Bearer ...` and loads the user + `account_ids` from SQLite. |
-| Gateway | `app/gateway.py` | `handle_message(user, req, mode) -> ChatResponse` is the chat pipeline. Sets audit context via `tool_context`, retrieves docs, runs mode-specific security checks, gives the agent a `tool_executor`, runs response guard/event logging in full mode, and returns `ChatResponse`. |
+| Gateway | `app/gateway.py` | `handle_message(user, req, mode) -> ChatResponse` is the chat pipeline. Sets audit context via `tool_context`, retrieves docs, runs mode-specific security checks, passes stored session history to the agent identically in all modes, gives the agent a `tool_executor`, runs response guard/event logging in full mode, and returns `ChatResponse`. |
 | Agent | `app/chatbot.py` | `run_agent` dispatches to a deterministic mock when `LLM_PROVIDER=mock`, otherwise runs a LangChain tool-calling loop (`MAX_TOOL_ROUNDS=5`, temperature from settings, fixed to 0.0). The agent never touches DB/bank APIs directly; it calls the gateway-supplied `tool_executor`. System prompt marks retrieved docs as untrusted data and states source/destination account rules. |
 | Retrieval | `app/retrieval.py` | Loads trusted markdown FAQs from `data/docs/*.md`, ranks with a dependency-free TF-IDF cosine scorer, and returns top `k` (default 3). In-memory temp docs added by `add_temp_doc` are always given slots in the top-k before file docs; `clear_temp_docs` removes them. |
 | Banking tools | `app/bank_api.py` | Raw tools with no authorization: `get_balance`, `get_transactions`, `execute_transfer`. Each executed call records one `audit_log` row. Transfers can run in the caller's SQLite transaction via `transfer_transaction(conn)`. |
@@ -17,7 +17,7 @@ This document describes the implementation as it exists in the repository. Every
 | Detector | `app/security/detector.py` | `inspect(text, source="user"|"document") -> DetectionResult`. Normalizes Unicode, strips invisible chars, checks rule regexes and leet variants, adds `embedded_document_instruction` for document-directed instructions when `source=="document"`, and adds `obfuscation` for long encoded-looking spans. Flagged when score >= 0.65 (capped at 1.0). |
 | Policy | `app/security/policy.py` | `authorize(user, call) -> PolicyDecision`. Validates tool name/args with strict Pydantic schemas. Enforces customer role, account ownership for balance/transactions/source transfer account, transfer amount/recipient constraints, and source!=recipient. Allowed transfers return `requires_confirmation=True`. |
 | Confirmation | `app/security/confirmation.py` | Creates pending transfers in DB with HMAC-SHA256 binding hash (`v2:` prefix). `confirm` re-authorizes, checks binding/status/expiry, runs transfer in one SQLite transaction, marks confirmed/cancelled, and returns `ToolResult`. `cancel` marks pending rows cancelled. |
-| Response guard | `app/security/response_guard.py` | `check(user, text, verified_facts=None) -> GuardResult`. Blocks system-prompt disclosure and unverified monetary claims; redacts canaries and other-customer identifiers; masks own identifiers. Returns safe/unsafe with findings. |
+| Response guard | `app/security/response_guard.py` | `check(user, text, verified_facts=None) -> GuardResult`. Blocks system-prompt disclosure and unverified monetary claims; redacts all canary tokens and other-customer identifiers; treats the signed-in user's own canary as non-unsafe only when it appears in verified transaction facts. Other identifiers belonging to the signed-in user are left unchanged. Returns safe/unsafe with findings. |
 | Security events | `app/security/events.py` | `log_event` persists fixed-summary events with allowlisted details; `list_events` returns recent events with redaction/normalization. Stored in `security_events` table. |
 
 ## Request pipeline by mode
@@ -109,6 +109,18 @@ flowchart TD
 
 Design decision verified in code: **security does not depend on the model obeying instructions**. The system prompt contains security-relevant wording, but enforcement is done by code paths: detector blocks, policy denial before `_dispatch`, pending transfer creation instead of execution, response guard on final text, and audit/event logging in backend code.
 
+## Session history
+
+Verified in `app/gateway.py`, `app/chatbot.py`, and `eval/run_eval.py`:
+
+- Conversation memory is process-local and keyed by `(user.id, req.session_id)`. A lock protects a bounded `OrderedDict`; `clear_sessions()` empties it for tests.
+- At most 1000 sessions are kept. When a new session would exceed the cap, the least recently used session is evicted.
+- Each session keeps the last 10 completed exchanges. An exchange is one user message plus the exact `ChatResponse.reply` returned to the caller, stored as `{"role": "user"|"assistant", "content": ...}` dicts.
+- Blocked turns are not stored: detector-only/full blocked user messages, blocked retrieved documents, and unsafe replies from the response guard never enter session memory. Pending-transfer and policy-denial replies are non-blocked and are stored.
+- Retrieved documents, tool results, canaries and audit rows are never stored in session memory.
+- The same history snapshot is passed to `chatbot.run_agent` in baseline, detector_only and full. For a real provider, `_run_langchain` converts it with `_history_messages` into LangChain `HumanMessage`/`AIMessage` objects placed after the system prompt and before the current message. The deterministic mock agent intentionally ignores history.
+- `eval/run_eval.py` creates one session id per case and reuses it for every turn of that case, so multi-turn cases exercise this memory.
+
 ## Transfer confirmation flow
 
 Verified in `app/security/confirmation.py`, `app/gateway.py`, `app/main.py`, and `app/bank_api.py`:
@@ -131,6 +143,7 @@ Recorded by code:
 - `bank_api.get_balance/get_transactions/execute_transfer` record through `_record`/`_insert_tool_call`.
 - `gateway._dispatch` records `search_faq` as `ToolResult(ok=True, data={"docs": ...})` then `record_tool_call("search_faq", {"query": query}, result.ok)`.
 - `audit._insert_tool_call` stores UTC ISO timestamp (`...Z`), context `user_id`/`mode` (defaults: `None`, `"unknown"` if context missing; user fallback from account owner), `json.dumps(args, sort_keys=True)`, and `ok` as int.
+- A transfer executed through `POST /transfers/{id}/confirm` is outside the gateway's `tool_context`, so its `create_transfer` audit row has `mode="unknown"`. The `user_id` is still resolved from the source account owner by `_account_owner`. Chat-time full-mode pending transfers write no audit row until an endpoint confirmation executes the transfer.
 
 What it does **not** contain by implementation:
 - No tool result payloads, balances, transaction rows, document text, canaries, or model replies.
