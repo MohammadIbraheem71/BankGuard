@@ -3,4 +3,3 @@
 __pycache__/
 .venv/
 eval/results/raw/
-eval/cases/heldout.jsonl
