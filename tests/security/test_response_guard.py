@@ -41,14 +41,28 @@ def test_canary_in_another_accounts_facts_is_still_unsafe(alice):
     assert result.text == "Latest transaction: Memo [redacted]"
 
 
-@pytest.mark.parametrize(("identifier", "masked"), [
-    ("42101-1234567-1", "****5671"),
-    ("PKR-1001-CHK", "****1001"),
+@pytest.mark.parametrize("identifier", [
+    "42101-1234567-1", "PKR-1001-CHK", "alice@example.test", "+92-300-1234567",
 ])
-def test_masks_owner_identifiers(alice, identifier, masked):
+def test_preserves_owner_identifiers(alice, identifier):
     result = check(alice, f"Identifier: {identifier}")
-    assert result.text == f"Identifier: {masked}"
-    assert result.findings == ["masked_customer_identifier"]
+    assert result.safe and result.findings == []
+    assert result.text == f"Identifier: {identifier}"
+
+
+def test_mixed_ownership(alice):
+    text = "PKR-1001-CHK, bob@example.test, CANARY-BOB-4482"
+    result = check(alice, text)
+    assert not result.safe
+    assert result.text == "PKR-1001-CHK, [redacted], [redacted]"
+
+
+def test_foreign_marker_inside_verified_own_transaction(alice):
+    facts = {"get_transactions": [
+        {"account_id": 1001, "transactions": [{"description": "Memo CANARY-BOB-4482"}]},
+    ]}
+    result = check(alice, "Memo CANARY-BOB-4482", facts)
+    assert not result.safe and result.text == "Memo [redacted]"
 
 
 @pytest.mark.parametrize("text", [
@@ -105,3 +119,17 @@ def test_checks_transfer_amount_and_new_balance(alice):
     assert check(alice, "Transfer of PKR 500 completed. New balance: PKR 124,500.", facts).safe
     assert not check(alice, "Transfer of PKR 600 completed.", facts).safe
     assert not check(alice, "New balance: PKR 123,000.", facts).safe
+
+
+def test_full_mode_own_transactions_are_usable(alice):
+    from app.config import Mode
+    from app.gateway import handle_message
+    from app.models import ChatRequest
+
+    response = handle_message(
+        alice, ChatRequest(message="Show my recent transactions.", session_id="m3-own-history"), Mode.full,
+    )
+    assert not response.blocked
+    assert [call.name for call in response.executed_tools] == ["get_transactions"]
+    assert "Memo [redacted]" in response.reply
+    assert "CANARY-" not in response.reply
