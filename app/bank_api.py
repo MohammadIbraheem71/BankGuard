@@ -81,7 +81,12 @@ def transfer_transaction(conn: sqlite3.Connection) -> Iterator[None]:
 
 
 def execute_transfer(from_account_id: int, to_account_ref: str, amount: float) -> ToolResult:
-    """Move PKR between a raw account id and an external reference, no auth."""
+    """Move PKR from a raw account id to a recipient reference, no auth.
+
+    A numeric account id or exact account_number that exists in the local SQLite
+    DB is credited in the same transaction. Other references are treated as
+    external destinations: the source is debited, but no local credit is posted.
+    """
     args = {
         "from_account_id": from_account_id,
         "to_account_ref": to_account_ref,
@@ -99,6 +104,21 @@ def _run_transfer(conn: sqlite3.Connection, args: dict) -> ToolResult:
     result = _apply_transfer(conn, **args)
     _insert_tool_call(conn, "create_transfer", args, result.ok)
     return result
+
+
+def _internal_recipient_id(conn: sqlite3.Connection, to_account_ref: str) -> int | None:
+    """Resolve a recipient ref to a local account id, or None for external refs."""
+    text = to_account_ref.strip()
+    if text.isdecimal() and str(int(text)) == text:
+        row = conn.execute(
+            "SELECT id FROM accounts WHERE id = ?", (int(text),)
+        ).fetchone()
+        if row is not None:
+            return row["id"]
+    row = conn.execute(
+        "SELECT id FROM accounts WHERE lower(account_number) = lower(?)", (text,)
+    ).fetchone()
+    return row["id"] if row is not None else None
 
 
 def _apply_transfer(
@@ -121,6 +141,23 @@ def _apply_transfer(
         "INSERT INTO transactions (account_id, ts, description, amount) VALUES (?, ?, ?, ?)",
         (from_account_id, ts, f"Transfer to {to_account_ref}", -amount),
     )
+
+    destination_id = _internal_recipient_id(conn, to_account_ref)
+    if destination_id is not None and destination_id != from_account_id:
+        destination = conn.execute(
+            "SELECT balance FROM accounts WHERE id = ?", (destination_id,)
+        ).fetchone()
+        if destination is None:
+            return ToolResult(ok=False, data={}, error="Destination account not found")
+        destination_balance = round(destination["balance"] + amount, 2)
+        conn.execute(
+            "UPDATE accounts SET balance = ? WHERE id = ?", (destination_balance, destination_id)
+        )
+        conn.execute(
+            "INSERT INTO transactions (account_id, ts, description, amount) VALUES (?, ?, ?, ?)",
+            (destination_id, ts, f"Transfer from {from_account_id}", amount),
+        )
+
     return ToolResult(
         ok=True,
         data={

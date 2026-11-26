@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app import chatbot, gateway
+from app import bank_api, chatbot, gateway
 from app.config import DEFAULT_SECRET_KEY, Mode, settings
 from app.db import get_conn, reset_and_seed
 from app.gateway import clear_sessions, handle_message
@@ -400,3 +400,98 @@ def test_confirmed_transfer_audit_row_records_full_mode() -> None:
     rows = _audit_rows("create_transfer")[before:]
     assert rows[-1]["mode"] == "full"
     assert rows[-1]["user_id"] == 1
+
+
+def _isolated_db(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point every DB helper at a private seeded database for one test."""
+    monkeypatch.setattr(settings, "db_path", str(tmp_path / "credit-test.db"))
+    reset_and_seed()
+
+
+def _balances(*account_ids: int) -> dict[int, float]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, balance FROM accounts WHERE id IN (%s)" % ",".join("?" * len(account_ids)),
+            account_ids,
+        ).fetchall()
+    finally:
+        conn.close()
+    return {row["id"]: row["balance"] for row in rows}
+
+
+def test_internal_transfer_credits_destination_by_account_id(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A numeric internal recipient receives the amount in the same DB update."""
+    _isolated_db(tmp_path, monkeypatch)
+    result = bank_api.execute_transfer(1001, "1002", 500.0)
+    assert result.ok is True
+    assert _balances(1001, 1002) == {1001: 124_500.0, 1002: 480_500.0}
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT account_id, description, amount FROM transactions ORDER BY id DESC LIMIT 2"
+        ).fetchall()
+    finally:
+        conn.close()
+    assert [(r["account_id"], r["amount"]) for r in rows] == [
+        (1002, 500.0), (1001, -500.0)
+    ]
+
+
+def test_internal_transfer_credits_destination_by_account_number(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The seeded account_number is also a valid internal recipient reference."""
+    _isolated_db(tmp_path, monkeypatch)
+    result = bank_api.execute_transfer(1001, "PKR-1002-SAV", 250.0)
+    assert result.ok is True
+    assert _balances(1001, 1002) == {1001: 124_750.0, 1002: 480_250.0}
+
+
+def test_external_transfer_reference_stays_debit_only(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An external reference still debits the source without a local credit."""
+    _isolated_db(tmp_path, monkeypatch)
+    result = bank_api.execute_transfer(1001, "EXT-001", 500.0)
+    assert result.ok is True
+    assert _balances(1001, 1002) == {1001: 124_500.0, 1002: 480_000.0}
+
+
+def test_self_transfer_reference_is_not_double_posted(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A raw self-reference does not create a misleading debit+credit pair."""
+    _isolated_db(tmp_path, monkeypatch)
+    result = bank_api.execute_transfer(1001, "1001", 500.0)
+    assert result.ok is True
+    assert _balances(1001) == {1001: 124_500.0}
+
+
+def test_confirmed_full_mode_internal_transfer_credits_1002(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The GUI confirm path debits 1001 and credits 1002 together."""
+    _isolated_db(tmp_path, monkeypatch)
+    client = TestClient(app)
+    headers = _auth_headers()
+    pending = client.post(
+        "/chat?mode=full",
+        headers=headers,
+        json={
+            "message": "Transfer 500 from account 1001 to account 1002.",
+            "session_id": "credit-full-mode",
+        },
+    )
+    assert pending.status_code == 200
+    transfer = pending.json()["pending_transfer"]
+    assert transfer is not None
+    assert (transfer["from_account_id"], transfer["to_account_ref"]) == (1001, "1002")
+
+    confirmed = client.post(f"/transfers/{transfer['id']}/confirm", headers=headers)
+    assert confirmed.status_code == 200
+    assert confirmed.json()["ok"] is True
+    assert _balances(1001, 1002) == {1001: 124_500.0, 1002: 480_500.0}

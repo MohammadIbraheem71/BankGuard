@@ -17,3 +17,5 @@ This document records only facts available from git history and commit messages.
 | 2026-11-26 | `e88c974e3b5dee4757b77e5eeff23cab405a9677` | That phase-1 tree was merged into `main` and tagged `code-freeze`. |
 
 The held-out split was therefore evaluated twice: once on code at `9f05fbd`, before the M3 security commits listed above, and once on the frozen code at `code-freeze`. The second evaluation is not fully blind. The committed final-raw manifest records the second run's hashes and inferred tree; future raw runs record `git_commit` and `git_tree` directly. No new blind split is claimed.
+
+**Post-freeze behavior change:** a later change adds internal destination crediting to `app/bank_api.py`. The committed `real/` and `heldout/` tables still describe the frozen tree `44979c4c4165e1b475794d33c328d3e8c5819168`. They remain reproducible from `eval/results/final_raw/`, but a fresh real-model evaluation is required before claiming those tables describe the current code. No real LLM run was performed for this change.
