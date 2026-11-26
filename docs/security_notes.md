@@ -23,7 +23,7 @@ Three heading controls accounted for the missed cues. Four explicitly self-scope
 | User message | 4,800 | 0.015042 / 0.022583 | 0.015750 / 0.023583 |
 | Retrieved document | 1,600 | 0.016084 / 0.026421 | 0.016917 / 0.025752 |
 
-Measurements used Python 3.11.15 on arm64 macOS. After three warm-up passes, the runner timed each inspection with a monotonic nanosecond clock for 100 passes and subtracted a paired no-op call. These timings cover short fixture strings. A full-mode request also incurs the cost of checking each retrieved document, database access, and model inference. Sub-microsecond differences between runs are sensitive to machine load.
+Measurements used Python 3.11.15 on arm64 macOS. After three warm-up passes, the runner timed each inspection with a monotonic nanosecond clock for 100 passes and subtracted a paired no-op call. These timings cover short fixture strings. A full-mode request also incurs the cost of checking each retrieved document, database access, and model inference. Sub-microsecond differences between runs are sensitive to machine load. The detector/policy counts in the table are the reproducible controls; the millisecond values are illustrative for that machine and are not expected to match exactly on another OS, Python version, or CPU.
 
 From the repository root, run the following in the project environment. Commit `b66adf0` contains the baseline runner and frozen inputs. Commit `d645f93` contains the revised rules.
 

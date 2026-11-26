@@ -161,8 +161,11 @@ def render_comparison_panel() -> None:
         st.info("No results yet. Run `python -m eval.run_eval --split dev` and then "
                 "`python -m eval.metrics eval/results/raw/<file>.json --out-dir eval/results/<name>`.")
         return
-    choice = st.radio("Results set", sets, horizontal=True, key="results_set",
-                      help="real = real LLM run; mock = offline harness check")
+    choice = st.radio(
+        "Results set", sets, horizontal=True, key="results_set",
+        help="real = real LLM dev run; mock = offline harness check; "
+             "heldout = post-development validation, not a blind first look",
+    )
     folder = RESULTS_DIR / choice
     overall, by_category, stamp = load_results(folder)
     if overall is None:
@@ -172,6 +175,8 @@ def render_comparison_panel() -> None:
     provider, model = _results_header(folder)
     st.caption(f"Latest results written {stamp} (eval/results/{choice}/). "
                f"LLM provider: `{provider or 'unknown'}`, model: `{model or 'unknown'}`.")
+    if choice == "heldout":
+        st.caption("The `heldout` set is post-development validation, not a blind first look.")
     if provider == "mock" or model == "mock":
         st.warning("These results come from the mock model. They test the harness only and "
                    "are not a measure of a real model.")

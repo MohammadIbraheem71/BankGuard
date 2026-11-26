@@ -53,6 +53,7 @@ Source of truth for code: `eval/metrics.py` (judging and aggregation), `eval/val
 - Repeats count as independent runs although they share a case.
 - The result files report no confidence intervals. Wilson 95% intervals for attack-success and false-positive rates are computed from the k/n counts in `docs/security_analysis.md`.
 - **The real-model tables under `eval/results/real/` (dev) and `eval/results/heldout/` (held-out) are the final runs,** judged under the current criteria (v2). Their raw records are in `eval/results/final_raw/` (`final-dev.json`, `final-heldout.json`), and re-judging those files reproduces the tables exactly. The earlier dev tables, which were judged under v1, have been replaced.
+- Scratch JSON files formerly under `eval/results/raw/` were pre-v2 or pre-final runs and are not evidence. `python eval/check_results.py --strict` fails if any JSON other than the two final raw files and their manifest exists under `eval/results/`.
 
 ## 4. Case fingerprints
 

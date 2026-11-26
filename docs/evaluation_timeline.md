@@ -16,4 +16,4 @@ This document records only facts available from git history and commit messages.
 | 2026-11-26 | `374c094c0105c00bac826d74d348b2256f5bb02e` | Final dev and held-out runs for this submission were executed from this `ibraheem/final` commit. |
 | 2026-11-26 | `e88c974e3b5dee4757b77e5eeff23cab405a9677` | That phase-1 tree was merged into `main` and tagged `code-freeze`. |
 
-The held-out split was therefore evaluated twice: once on code at `9f05fbd`, before the M3 security commits listed above, and once on the frozen code at `code-freeze`. The second evaluation is not fully blind.
+The held-out split was therefore evaluated twice: once on code at `9f05fbd`, before the M3 security commits listed above, and once on the frozen code at `code-freeze`. The second evaluation is not fully blind. The committed final-raw manifest records the second run's hashes and inferred tree; future raw runs record `git_commit` and `git_tree` directly. No new blind split is claimed.

@@ -27,8 +27,8 @@ copy_path() {
 }
 
 # Source, docs, eval cases/results, tests, UI and project metadata.
-for p in app data docs eval scripts tests ui AGENTS.md CONTRACT.md README.md \
-         requirements.txt pytest.ini .env.example .gitignore; do
+for p in app data docs eval scripts tests ui .github AGENTS.md CONTRACT.md README.md \
+         requirements.txt requirements.lock.txt pytest.ini .env.example .gitignore; do
   [ -e "$p" ] || continue
   copy_path "$p"
 done

@@ -87,7 +87,7 @@ def test_mock_reply_label_does_not_expose_llm_model() -> None:
 
 
 def test_confirmed_transfer_audit_row_uses_source_account_owner() -> None:
-    """Confirmation outside tool_context still attributes the row to the owner."""
+    """Confirmation keeps both the source-account owner and the full mode."""
     pending = _chat("Transfer 500 to account 2001", Mode.full).pending_transfer
     assert pending is not None
     assert (pending.from_account_id, pending.to_account_ref) == (1001, "2001")
@@ -116,5 +116,5 @@ def test_confirmed_transfer_audit_row_uses_source_account_owner() -> None:
         conn.close()
     assert len(rows) == 1
     assert rows[0]["user_id"] == expected_owner
-    assert rows[0]["mode"] == "unknown"
+    assert rows[0]["mode"] == "full"
     assert rows[0]["ok"] == 1

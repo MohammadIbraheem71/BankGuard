@@ -6,14 +6,19 @@ All users, accounts, transactions, and FAQ documents are synthetic. Chat request
 
 ## Setup
 
-Requirements: Python 3.11+ (repo tested in a local `.venv`), SQLite, and the packages in `requirements.txt`.
+Requirements: Python 3.11+ (the cleanroom check used Python 3.14.4), SQLite, and the packages in `requirements.txt`. `requirements.lock.txt` records the exact versions installed in that verified cleanroom; CI uses the same Python version.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -c requirements.lock.txt
 cp .env.example .env
 ```
+
+Replace `SECRET_KEY` in `.env` with a long random value. For a non-demo startup,
+set `BANKGUARD_REQUIRE_SECRET=1` so the default fallback secret is refused.
+
+Before committing, run `bash scripts/pre_commit_check.sh`; CI runs the same offline mock pytest.
 
 `.env.example` includes:
 
@@ -27,6 +32,7 @@ GROQ_API_KEY=
 OLLAMA_BASE_URL=http://localhost:11434
 DB_PATH=data/bankguard.db
 SECRET_KEY=replace-with-a-long-random-secret
+BANKGUARD_REQUIRE_SECRET=0
 ```
 
 Notes verified in code:
@@ -107,7 +113,7 @@ LLM_PROVIDER=openai .venv/bin/python -m eval.run_eval \
   --out-dir eval/results/real
 ```
 
-Final held-out evaluation requires the tracked case file and the explicit guard flag; it is only run at/after code freeze:
+Final post-development held-out-style validation requires the tracked case file and the explicit guard flag; it is only run at/after code freeze:
 
 ```bash
 LLM_PROVIDER=openai .venv/bin/python -m eval.run_eval \
@@ -117,7 +123,7 @@ LLM_PROVIDER=openai .venv/bin/python -m eval.run_eval \
   --out-dir eval/results/heldout
 ```
 
-Useful flags from `eval/run_eval.py`: `--split {dev,heldout,both}`, `--modes`, `--repeat`, `--out`, `--limit`, `--allow-heldout`. Do not tune anything against the held-out split after reading its results; it is evaluated once before freeze by Anum and once on the frozen code for the final report, so it is not fully blind on the second run.
+Useful flags from `eval/run_eval.py`: `--split {dev,heldout,both}`, `--modes`, `--repeat`, `--out`, `--limit`, `--allow-heldout`. Do not tune anything against the held-out split after reading its results. The second run is post-development validation, not a blind first look: the same cases were run earlier on pre-M3 code, and the code changed between runs.
 
 ## Modes
 
@@ -128,7 +134,7 @@ Useful flags from `eval/run_eval.py`: `--split {dev,heldout,both}`, `--modes`, `
 ## Results
 
 - `eval/results/raw/`: raw JSON runs, gitignored because they include case text. Scratch runs only.
-- `eval/results/final_raw/`: committed raw JSON files for the two final runs (dev and held-out), kept for provenance.
+- `eval/results/final_raw/`: committed raw JSON files for the two final runs (dev and held-out), kept for provenance. `manifest.json` records their hashes, inferred code commit/tree and model settings.
 - `eval/results/mock/`: derived CSV, markdown and charts from mock harness runs; not comparable to real-model results.
 - `eval/results/real/`: derived CSV, markdown and charts from the final real-model dev run.
 - `eval/results/heldout/`: derived CSV, markdown and charts from the real-model held-out run.

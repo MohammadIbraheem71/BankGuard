@@ -8,10 +8,10 @@ Change a signature only by editing this file in a small PR and telling the team.
 - full: detector on user message AND retrieved docs, policy engine on every tool call, confirmation for transfers, response guard, event logging.
 
 ## Ownership
-Ibraheem: app/*.py (except security/), data/, docs/architecture.md, README, tests/test_smoke.py
-Muzammil: app/security/*, tests/security/*
-Anum: eval/*, ui/*, docs/security_analysis.md
-Never edit files you don't own. Need a change? Ask the owner.
+Ibraheem: app/*.py (except security/), data/, docs/architecture.md, docs/proposal_compliance.md, README, tests/test_smoke.py, CONTRACT.md, AGENTS.md, .gitignore, .env.example, requirements*.txt, scripts/**, .github/**, repository-level CI
+Muzammil: app/security/*, tests/security/*, docs/security_notes.md, I3_bugs_muzammil.txt
+Anum: eval/*, ui/*, docs/security_analysis.md, docs/eval_criteria_changes.md, docs/evaluation_timeline.md, I3_bugs_anum.txt
+Never edit files you don't own. Need a change? Ask the owner. Historical integration commits before this table was ratified are grandfathered; do not repeat them.
 
 ## Shared types (app/models.py, pydantic v2)
 User(id:int, username:str, role:Literal["customer"], account_ids:list[int])

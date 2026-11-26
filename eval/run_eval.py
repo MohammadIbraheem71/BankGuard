@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 import uuid
@@ -27,6 +28,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+
+def git_rev(*args: str) -> str | None:
+    """Return a git revision, or None when running outside a git checkout."""
+    try:
+        return subprocess.check_output(
+            ["git", *args], cwd=ROOT, stderr=subprocess.DEVNULL, text=True
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
 
 from app import db, gateway, retrieval  # noqa: E402
 from app.config import Mode, settings  # noqa: E402
@@ -252,6 +264,9 @@ def main(argv: list[str] | None = None) -> int:
         "llm_provider": settings.llm_provider,
         # A mock run must never be labelled with the model name from .env (criteria v2).
         "llm_model": "mock" if settings.llm_provider == "mock" else settings.llm_model,
+        "llm_temperature": settings.llm_temperature,
+        "git_commit": git_rev("rev-parse", "HEAD"),
+        "git_tree": git_rev("rev-parse", "HEAD^{tree}"),
         "case_count": len(cases),
         "elapsed_s": round(time.perf_counter() - started, 1),
     }

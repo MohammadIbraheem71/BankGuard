@@ -1,0 +1,45 @@
+{
+  "purpose": "Provenance for the two committed final raw evaluation runs. No LLM was re-run to create this manifest.",
+  "code": {
+    "commit_inferred_from": "docs/evaluation_timeline.md",
+    "commit": "374c094c0105c00bac826d74d348b2256f5bb02e",
+    "tree": "44979c4c4165e1b475794d33c328d3e8c5819168",
+    "code_freeze_tag_commit": "e88c974e3b5dee4757b77e5eeff23cab405a9677",
+    "note": "The raw run metadata itself does not record git_commit; this manifest and the timeline supply it."
+  },
+  "settings": {
+    "llm_provider": "openai",
+    "llm_model": "gpt-4o-mini",
+    "llm_temperature": 0.0,
+    "temperature_source": "app/config.py: llm_temperature is fixed at 0.0"
+  },
+  "scorer": {
+    "module": "eval/metrics.py",
+    "runner_version": 1,
+    "check_command": "python eval/check_results.py --strict"
+  },
+  "runs": [
+    {
+      "file": "final-dev.json",
+      "split": "dev",
+      "case_count": 60,
+      "records": 180,
+      "created_at": "20261126T160018Z",
+      "sha256": "278edda9bf8aabd9f5d5c034d97af7bb0c00bf09d9234c9bfd0820557a795b1c",
+      "bytes": 361896,
+      "result_table": "eval/results/real/results_overall.csv",
+      "result_table_sha256": "d8e9555d4a5c35aa8fe176071adf8c65fe55c072d2afdd970133f637682291db"
+    },
+    {
+      "file": "final-heldout.json",
+      "split": "heldout",
+      "records": 180,
+      "case_count": 60,
+      "created_at": "20261126T161237Z",
+      "sha256": "a91974bed99a557b4645a8bf8b9f18137a3fdde430d5321af235cfad823ae98a",
+      "bytes": 356620,
+      "result_table": "eval/results/heldout/results_overall.csv",
+      "result_table_sha256": "9fa33550dea8373f342c10d54753faa5ad4805f1a5da2c3cbd0dc63027374509"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 """Password hashing and stateless bearer tokens. Owner: Ibraheem.
 
-TODO(ibraheem): add token revocation/rotation if the demo needs logout.
+Tokens are intentionally stateless for this demo: there is no revocation list,
+rotation endpoint, or server-side logout. See docs/architecture.md.
 Hash format: pbkdf2_sha256$iterations$salt_hex$hash_hex.
 """
 from __future__ import annotations

@@ -7,13 +7,14 @@ cross-account ownership check.
 from __future__ import annotations
 
 import json
+import warnings
 
 import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app import chatbot, gateway
-from app.config import Mode, settings
+from app.config import DEFAULT_SECRET_KEY, Mode, settings
 from app.db import get_conn, reset_and_seed
 from app.gateway import clear_sessions, handle_message
 from app.main import app
@@ -344,3 +345,58 @@ def test_session_memory_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert [item["content"] for item in seen[2]] == ["a1", "r1", "a2", "r2"]
     assert list(gateway._SESSIONS) == [(2, "bob-1"), (2, "bob-2")]
+
+
+def test_default_secret_warns_but_allows_demo_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The demo fallback secret is visible, not silent."""
+    monkeypatch.setattr(settings, "secret_key", DEFAULT_SECRET_KEY)
+    monkeypatch.delenv("BANKGUARD_REQUIRE_SECRET", raising=False)
+    with pytest.warns(RuntimeWarning, match="default demo SECRET_KEY"):
+        with TestClient(app) as client:
+            assert client.get("/openapi.json").status_code == 200
+
+
+def test_default_secret_is_refused_in_strict_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-demo startup refuses the placeholder secret when explicitly asked."""
+    monkeypatch.setattr(settings, "secret_key", DEFAULT_SECRET_KEY)
+    monkeypatch.setenv("BANKGUARD_REQUIRE_SECRET", "1")
+    with pytest.raises(RuntimeError, match="default demo SECRET_KEY"):
+        with TestClient(app):
+            pass
+
+
+def test_configured_secret_startup_is_quiet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A real configured secret produces no secret warning."""
+    monkeypatch.setattr(settings, "secret_key", "unit-test-secret")
+    monkeypatch.delenv("BANKGUARD_REQUIRE_SECRET", raising=False)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with TestClient(app) as client:
+            assert client.get("/openapi.json").status_code == 200
+    assert not [w for w in caught if "SECRET_KEY" in str(w.message)]
+
+
+def test_confirmed_transfer_audit_row_records_full_mode() -> None:
+    """The confirmation endpoint preserves the mode in audit_log."""
+    client = TestClient(app)
+    headers = _auth_headers()
+    before = len(_audit_rows("create_transfer"))
+
+    pending = client.post(
+        "/chat?mode=full",
+        headers=headers,
+        json={
+            "message": "Transfer PKR 20 from account 1001 to 2001.",
+            "session_id": "confirm-audit",
+        },
+    )
+    assert pending.status_code == 200
+    pending_id = pending.json()["pending_transfer"]["id"]
+
+    confirmed = client.post(f"/transfers/{pending_id}/confirm", headers=headers)
+    assert confirmed.status_code == 200
+    assert confirmed.json()["ok"] is True
+
+    rows = _audit_rows("create_transfer")[before:]
+    assert rows[-1]["mode"] == "full"
+    assert rows[-1]["user_id"] == 1

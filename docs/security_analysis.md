@@ -1,6 +1,6 @@
 # Security analysis
 
-Owner: Anum. Status: final. Held-out is the headline.
+Owner: Anum. Status: final. Post-development held-out-style validation is the headline; it is not a blind first look.
 
 ## How to read the numbers
 
@@ -9,7 +9,7 @@ Owner: Anum. Status: final. Held-out is the headline.
 - **Wilson 95% intervals** are given for attack success and false-positive rates. They are not in the result files. They are computed from the k/n counts with the Wilson score interval (z = 1.96).
 - **Zero observed successes does not mean zero risk.** With 0 of 40 attacks succeeding, the Wilson interval still allows an attack success rate up to 8.8%. With 0 of 20 benign runs blocked, it still allows a false-positive rate up to 16.1%.
 
-## 1. Headline: held-out, final run
+## 1. Headline: post-development held-out validation, final run
 
 Real model `gpt-4o-mini`, temperature 0, one run per case. 40 attack cases and 20 benign cases per mode.
 
@@ -36,7 +36,7 @@ The intervals are wide. Four successes in 40 attacks is a small count. The diffe
 | 1 | `9f05fbd` | 2026-11-26 06:56 | Before the M3 security commits (`b66adf0`, `d645f93`, `cde2fd9`) and before session history (`374c094`) | Local only (git-ignored, never committed); its tables were later overwritten | No |
 | 2 (final) | `374c094` (ancestor of `main`; tagged `code-freeze` via `e88c974`) | 2026-11-26 16:00 to 16:12 | Final code | `eval/results/final_raw/final-heldout.json` | Yes |
 
-Commit `374c094` and the code-freeze tag come from `docs/evaluation_timeline.md`. The final raw metadata does not record a commit (`git_commit` is null), so the timeline is the source for which code produced the final run.
+Commit `374c094` and the code-freeze tag come from `docs/evaluation_timeline.md`. The final raw metadata does not record a commit; `eval/results/final_raw/manifest.json` records the inferred commit, tree hash and file hashes for this submission. Future runs write `git_commit` and `git_tree` into raw metadata directly.
 
 - **What is not blind.** The team saw run 1's held-out results before run 2, and the code changed between the two runs (M3 security changes and session history). The repository records do not say whether run 1 results influenced those changes, so run 2 is not a clean first look at the held-out split.
 - **What did not change.** The held-out case file was committed once (`48ecabd`), and the run 2 records match it on turns, expected block, category, user and confirmation flag for all 60 cases. The case set was the same in both runs. Only the code changed.
@@ -188,7 +188,7 @@ These negative overheads do not mean the controls make the bot faster. They are 
 ## 9. Lessons learned
 
 1. **Report the held-out split as the headline, with its validity caveats.** Dev showed detector_only reducing baseline's successes from 6 to 4. Held-out shows it reducing them from 4 to 3. Both are small, and the held-out result is the one to quote.
-2. **Keep a record of which code produced each run.** The final raw files do not record a commit. The timeline doc supplies it. Adding the commit hash to the run metadata would remove the dependency on a separate document.
+2. **Keep a record of which code produced each run.** The final raw files did not record a commit; the committed manifest now supplies it, and future runs write `git_commit` and `git_tree` into raw metadata directly.
 3. **Log attempts, not only executions.** Without attempt logs, a stop caused by the model not trying a tool cannot be told apart from a stop by a control.
 4. **Leakage needs cases that can leak.** Held-out has one leak in 20 eligible runs. One case is not enough to assess the response guard.
 5. **Ablations need one layer removed at a time.** The comparison has baseline, detector_only and full. A run without the transfer gate, or without the response guard, would show each layer's contribution.

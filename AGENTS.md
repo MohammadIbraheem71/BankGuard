@@ -9,9 +9,9 @@ CONTRACT.md is the source of truth, never change a signature without editing CON
 ## Ownership
 | Owner | Files |
 | --- | --- |
-| Ibraheem | app/*.py (except security/), data/, docs/architecture.md, README, tests/test_smoke.py |
-| Muzammil | app/security/*, tests/security/* |
-| Anum | eval/*, ui/*, docs/security_analysis.md |
+| Ibraheem | app/*.py (except security/), data/, docs/architecture.md, docs/proposal_compliance.md, README, tests/test_smoke.py, CONTRACT.md, AGENTS.md, .gitignore, .env.example, requirements*.txt, scripts/**, .github/**, repository-level CI |
+| Muzammil | app/security/*, tests/security/*, docs/security_notes.md, I3_bugs_muzammil.txt |
+| Anum | eval/*, ui/*, docs/security_analysis.md, docs/eval_criteria_changes.md, docs/evaluation_timeline.md, I3_bugs_anum.txt |
 
 never edit files you don't own
 
