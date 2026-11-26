@@ -18,7 +18,7 @@ cp .env.example .env
 Replace `SECRET_KEY` in `.env` with a long random value. For a non-demo startup,
 set `BANKGUARD_REQUIRE_SECRET=1` so the default fallback secret is refused.
 
-Before committing, run `bash scripts/pre_commit_check.sh`; CI runs the same offline mock pytest.
+Before committing, run `bash scripts/pre_commit_check.sh`; CI runs the same offline mock pytest plus the strict result-integrity check.
 
 `.env.example` includes:
 
@@ -87,7 +87,7 @@ The UI files live in `ui/`; check `ui/ui_check.md` and the UI code for any UI-sp
 LLM_PROVIDER=mock .venv/bin/pytest -o addopts= -q
 ```
 
-`pytest.ini` sets `pythonpath = .` and `testpaths = tests`.
+`pytest.ini` sets `pythonpath = .` and `testpaths = tests eval/tests`, so the offline result-integrity test runs too.
 
 ## Run evaluation
 

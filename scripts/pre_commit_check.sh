@@ -10,3 +10,4 @@ if [ ! -x "$PY" ]; then
 fi
 
 LLM_PROVIDER=mock PYTHONDONTWRITEBYTECODE=1 "$PY" -m pytest -o addopts= -q -p no:cacheprovider
+PYTHONDONTWRITEBYTECODE=1 "$PY" eval/check_results.py --strict

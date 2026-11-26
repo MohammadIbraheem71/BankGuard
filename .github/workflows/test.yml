@@ -20,4 +20,4 @@ jobs:
         env:
           LLM_PROVIDER: mock
           PYTHONDONTWRITEBYTECODE: "1"
-        run: .venv/bin/python -m pytest -o addopts= -q -p no:cacheprovider
+        run: bash scripts/pre_commit_check.sh
