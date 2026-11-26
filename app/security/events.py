@@ -19,6 +19,7 @@ _SUMMARIES = {
     "blocked_document": "Blocked: retrieved document flagged",
     "policy_denied": "Denied: tool call rejected by policy",
     "transfer_pending": "Pending transfer awaits user confirmation",
+    "transfer_cancelled": "Pending transfer cancelled by user",
     "response_guard_blocked": "Blocked: outbound reply marked unsafe",
     "chat_completed": "Chat handled in full mode",
     "security_event": "Security event recorded",

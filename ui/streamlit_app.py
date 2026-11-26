@@ -142,7 +142,12 @@ def resolve_pending(action: str) -> None:
                 f"{pending['to_account_ref']} from account {pending['from_account_id']}.")
     else:
         text = f"Transfer {action} was not completed: {result.get('error') or 'unknown error'}"
-    st.session_state.messages.append({"role": "assistant", "content": text, "error": not bool(result and result.get("ok"))})
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": text,
+        "error": not bool(result and result.get("ok")),
+        "mode": st.session_state.mode,
+    })
 
 
 def render_pending_card() -> None:

@@ -134,6 +134,16 @@ def _apply_transfer(
     if account["balance"] < amount:
         return ToolResult(ok=False, data={}, error="Insufficient funds")
 
+    destination_id = _internal_recipient_id(conn, to_account_ref)
+    destination_balance: float | None = None
+    if destination_id is not None and destination_id != from_account_id:
+        destination = conn.execute(
+            "SELECT balance FROM accounts WHERE id = ?", (destination_id,)
+        ).fetchone()
+        if destination is None:
+            return ToolResult(ok=False, data={}, error="Destination account not found")
+        destination_balance = round(destination["balance"] + amount, 2)
+
     new_balance = round(account["balance"] - amount, 2)
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     conn.execute("UPDATE accounts SET balance = ? WHERE id = ?", (new_balance, from_account_id))
@@ -142,14 +152,7 @@ def _apply_transfer(
         (from_account_id, ts, f"Transfer to {to_account_ref}", -amount),
     )
 
-    destination_id = _internal_recipient_id(conn, to_account_ref)
     if destination_id is not None and destination_id != from_account_id:
-        destination = conn.execute(
-            "SELECT balance FROM accounts WHERE id = ?", (destination_id,)
-        ).fetchone()
-        if destination is None:
-            return ToolResult(ok=False, data={}, error="Destination account not found")
-        destination_balance = round(destination["balance"] + amount, 2)
         conn.execute(
             "UPDATE accounts SET balance = ? WHERE id = ?", (destination_balance, destination_id)
         )

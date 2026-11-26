@@ -13,7 +13,7 @@ from app import bank_api, db
 from app.config import settings
 from app.models import PendingTransfer, ToolCall, ToolResult, User
 
-from . import policy
+from . import events, policy
 
 _PENDING_TTL = timedelta(minutes=5)
 _BINDING_VERSION = "v2:"
@@ -135,4 +135,6 @@ def cancel(user: User, pending_id: str) -> ToolResult:
         )
         if updated.rowcount != 1:
             return _failure("Pending transfer is unavailable.")
-        return ToolResult(ok=True, data={"pending_id": pending_id, "status": "cancelled"}, error=None)
+        result = ToolResult(ok=True, data={"pending_id": pending_id, "status": "cancelled"}, error=None)
+    events.log_event(user.id, "full", "transfer_cancelled", "low", "", {"pending_id": pending_id})
+    return result

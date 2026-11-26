@@ -1,3 +1,4 @@
+import json
 import re
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -85,6 +86,20 @@ def test_owner_can_cancel_only_once(pending, alice):
     row, balance, debits, audit = _read_state(pending.id)
     assert row["status"] == "cancelled"
     assert (balance, debits, audit) == (125_000, 0, [])
+
+
+def test_owner_cancel_records_one_security_event(pending, alice):
+    assert confirmation.cancel(alice, pending.id).ok
+    assert not confirmation.cancel(alice, pending.id).ok
+
+    with closing(db.get_conn()) as conn:
+        rows = conn.execute(
+            "SELECT user_id, mode, event_type, details_json FROM security_events "
+            "WHERE event_type = 'transfer_cancelled'"
+        ).fetchall()
+    assert len(rows) == 1
+    assert (rows[0]["user_id"], rows[0]["mode"]) == (1, "full")
+    assert json.loads(rows[0]["details_json"])["pending_id"] == pending.id
 
 
 def test_expiry_at_five_minute_boundary(pending, alice, monkeypatch):

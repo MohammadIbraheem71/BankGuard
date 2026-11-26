@@ -471,6 +471,29 @@ def test_self_transfer_reference_is_not_double_posted(
     assert _balances(1001) == {1001: 124_500.0}
 
 
+def test_missing_resolved_destination_does_not_debit(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A destination that vanishes during resolution fails before any debit."""
+    _isolated_db(tmp_path, monkeypatch)
+    monkeypatch.setattr(bank_api, "_internal_recipient_id", lambda conn, ref: 9999)
+
+    result = bank_api.execute_transfer(1001, "1002", 500.0)
+    assert result.ok is False
+    assert result.error == "Destination account not found"
+    assert _balances(1001, 1002) == {1001: 125_000.0, 1002: 480_000.0}
+
+    conn = get_conn()
+    try:
+        debits = conn.execute(
+            "SELECT COUNT(*) FROM transactions WHERE account_id = 1001 "
+            "AND description LIKE 'Transfer to %'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert debits == 0
+
+
 def test_confirmed_full_mode_internal_transfer_credits_1002(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
