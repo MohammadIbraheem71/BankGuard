@@ -145,3 +145,4 @@ dev-018 was raised as a possible ownership problem. Its source is account 2001, 
 | 2026-11-23 | (local, not committed) | heldout | Initial held-out set, 60 cases, validated with `--allow-heldout`. | No |
 | 2026-11-23 | `2d10a6e` | both | Judging rules and aggregation (v1). | No |
 | 2026-11-23 | (this change) | both | Criteria v2: sections 5.1 to 5.3. | No. No held-out run exists. |
+| 2026-11-26 | `9f05fbd` (working tree; `origin/main` has later security changes not included) | heldout | First held-out run, real model `gpt-4o-mini`, all three modes, 180 runs. Raw file `eval/results/raw/heldout-real.json`; tables in `eval/results/heldout/`. **Criteria are now locked (rule 3).** | Yes |
