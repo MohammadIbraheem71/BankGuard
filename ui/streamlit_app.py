@@ -148,26 +148,27 @@ def resolve_pending(action: str) -> None:
         "error": not bool(result and result.get("ok")),
         "mode": st.session_state.mode,
     })
+    st.rerun()
 
 
-def render_pending_card() -> None:
-    """Show the exact recipient and amount, with Confirm and Cancel."""
+@st.dialog("Transfer awaiting your confirmation", position="right",
+           width=360, dismissible=False)
+def render_pending_dialog() -> None:
+    """Show the exact recipient and amount in a right-side pop-up."""
     pending = st.session_state.pending
     if not pending:
         return
-    with st.container(border=True):
-        st.subheader("Transfer awaiting your confirmation")
-        st.markdown(f"**From account:** {pending['from_account_id']}")
-        st.markdown(f"**Recipient:** `{pending['to_account_ref']}`")
-        st.markdown(f"**Amount:** PKR {pending['amount']:.2f}")
-        st.caption(f"Pending transfer ID: {pending['id']}. Nothing moves until you confirm.")
-        col_confirm, col_cancel = st.columns(2)
-        col_confirm.button("Confirm transfer", type="primary", width="stretch",
-                           key=f"confirm-{pending['id']}",
-                           on_click=resolve_pending, args=("confirm",))
-        col_cancel.button("Cancel", width="stretch",
-                          key=f"cancel-{pending['id']}",
-                          on_click=resolve_pending, args=("cancel",))
+    st.markdown(f"**From account:** {pending['from_account_id']}")
+    st.markdown(f"**Recipient:** `{pending['to_account_ref']}`")
+    st.markdown(f"**Amount:** PKR {pending['amount']:.2f}")
+    st.caption(f"Pending transfer ID: {pending['id']}. Nothing moves until you confirm.")
+    col_confirm, col_cancel = st.columns(2)
+    col_confirm.button("Confirm transfer", type="primary", width="stretch",
+                       key=f"confirm-{pending['id']}",
+                       on_click=resolve_pending, args=("confirm",))
+    col_cancel.button("Cancel", width="stretch",
+                      key=f"cancel-{pending['id']}",
+                      on_click=resolve_pending, args=("cancel",))
 
 
 def render_messages() -> None:
@@ -201,8 +202,9 @@ def main() -> None:
     prompt = st.chat_input("Ask about balances, transactions, transfers or bank FAQs")
     if prompt:
         send_message(prompt.strip())
-    render_pending_card()
     render_messages()
+    if st.session_state.pending:
+        render_pending_dialog()
 
 
 main()

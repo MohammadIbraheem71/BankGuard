@@ -1,0 +1,40 @@
+BankGuard demo startup
+
+Use this before running injections_for_demo.txt.
+This uses the original database at data/bankguard.db and the real OpenAI LLM.
+An OPENAI_API_KEY must already be configured in .env or the environment; it is never printed here.
+
+Terminal 1 - reseed the original DB and start the backend
+---------------------------------------------------------
+cd /media/ibraheem/HDD/BankGuard
+
+.venv/bin/python -c "from app.db import reset_and_seed; reset_and_seed()"
+
+LLM_PROVIDER=openai \
+LLM_MODEL=gpt-4o-mini \
+BANKGUARD_REQUIRE_SECRET=0 \
+  .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+Leave this running. If port 8000 is already in use, stop the existing backend first or change both the port here and the URL used by the UI.
+
+Terminal 2 - start the chat UI
+------------------------------
+cd /media/ibraheem/HDD/BankGuard
+
+.venv/bin/streamlit run ui/streamlit_app.py --server.port 8501
+
+Open:
+http://localhost:8501
+
+Optional - start the dashboard
+------------------------------
+cd /media/ibraheem/HDD/BankGuard
+
+.venv/bin/streamlit run ui/dashboard.py --server.port 8502
+
+Open:
+http://localhost:8502
+
+Stopping
+--------
+Press Ctrl-C in each terminal to stop the servers.
