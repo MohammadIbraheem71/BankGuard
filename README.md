@@ -134,7 +134,7 @@ Useful flags from `eval/run_eval.py`: `--split {dev,heldout,both}`, `--modes`, `
 ## Results
 
 - `eval/results/raw/`: raw JSON runs, gitignored because they include case text. Scratch runs only.
-- `eval/results/final_raw/`: committed raw JSON files for the two final runs (dev and held-out), kept for provenance. `manifest.json` records their hashes, inferred code commit/tree and model settings.
+- `eval/results/final_raw/`: committed raw JSON files for the two final runs (dev and held-out), kept for provenance. `manifest.json` records their hashes, code commit/tree, model settings, and checked code paths; `--strict` fails if those paths change after the recorded run.
 - `eval/results/mock/`: derived CSV, markdown and charts from mock harness runs; not comparable to real-model results.
 - `eval/results/real/`: derived CSV, markdown and charts from the final real-model dev run.
 - `eval/results/heldout/`: derived CSV, markdown and charts from the real-model held-out run.
@@ -147,12 +147,12 @@ Model: `gpt-4o-mini`; temperature: `0.0`. Rate denominators: attack success and 
 
 | Mode | Split | Attack success | Unauthorized executions | Leakage | False positives | Completion | Mean latency (ms) | p95 latency (ms) |
 |---|---|---|---|---|---|---|---:|---:|
-| baseline | dev | 15.0% (6/40) | 6 (6/40) | 0.0% (0/18) | 0.0% (0/20) | 100.0% (20/20) | 3096.4 | 9195.3 |
-| detector_only | dev | 10.0% (4/40) | 4 (4/40) | 0.0% (0/18) | 0.0% (0/20) | 100.0% (20/20) | 2839.9 | 7957.9 |
-| full | dev | 0.0% (0/40) | 0 (0/40) | 0.0% (0/18) | 0.0% (0/20) | 100.0% (20/20) | 2609.2 | 7675.2 |
-| baseline | heldout | 10.0% (4/40) | 3 (3/40) | 5.0% (1/20) | 0.0% (0/20) | 100.0% (20/20) | 2743.8 | 7408.6 |
-| detector_only | heldout | 7.5% (3/40) | 2 (2/40) | 5.0% (1/20) | 0.0% (0/20) | 100.0% (20/20) | 2555.7 | 6856.9 |
-| full | heldout | 0.0% (0/40) | 0 (0/40) | 0.0% (0/20) | 0.0% (0/20) | 100.0% (20/20) | 2612.1 | 7092.8 |
+| baseline | dev | 12.5% (5/40) | 5 (5/40) | 0.0% (0/18) | 0.0% (0/20) | 100.0% (20/20) | 2852.7 | 6770.6 |
+| detector_only | dev | 7.5% (3/40) | 3 (3/40) | 0.0% (0/18) | 0.0% (0/20) | 100.0% (20/20) | 2443.4 | 6416.3 |
+| full | dev | 0.0% (0/40) | 0 (0/40) | 0.0% (0/18) | 0.0% (0/20) | 100.0% (20/20) | 2308.9 | 6581.9 |
+| baseline | heldout | 7.5% (3/40) | 2 (2/40) | 5.0% (1/20) | 0.0% (0/20) | 100.0% (20/20) | 2908.8 | 7975.8 |
+| detector_only | heldout | 7.5% (3/40) | 2 (2/40) | 5.0% (1/20) | 0.0% (0/20) | 100.0% (20/20) | 2724.5 | 7150.4 |
+| full | heldout | 0.0% (0/40) | 0 (0/40) | 0.0% (0/20) | 0.0% (0/20) | 100.0% (20/20) | 2492.3 | 7507.7 |
 <!-- END FINAL RESULTS -->
 
 ## Repo layout

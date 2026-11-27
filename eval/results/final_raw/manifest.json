@@ -1,11 +1,10 @@
 {
-  "purpose": "Provenance for the two committed final raw evaluation runs. No LLM was re-run to create this manifest.",
+  "purpose": "Provenance for the current committed raw evaluation runs; regenerated on current main with real OpenAI calls.",
   "code": {
-    "commit_inferred_from": "docs/evaluation_timeline.md",
-    "commit": "374c094c0105c00bac826d74d348b2256f5bb02e",
-    "tree": "44979c4c4165e1b475794d33c328d3e8c5819168",
+    "commit": "8c79b9b2391c7937d1c425090cfec1b08218424d",
+    "tree": "7548c7f8f29b2a4aa01c964eac199b4da870687c",
     "code_freeze_tag_commit": "e88c974e3b5dee4757b77e5eeff23cab405a9677",
-    "note": "The raw run metadata itself does not record git_commit; this manifest and the timeline supply it."
+    "note": "Both raw runs record git_commit and git_tree directly. --strict also compares behavior-relevant files against the recorded commit."
   },
   "settings": {
     "llm_provider": "openai",
@@ -16,7 +15,15 @@
   "scorer": {
     "module": "eval/metrics.py",
     "runner_version": 1,
-    "check_command": "python eval/check_results.py --strict"
+    "check_command": "python eval/check_results.py --strict",
+    "checked_paths": [
+      "app",
+      "eval/*.py",
+      "eval/cases",
+      "scripts",
+      "requirements.txt",
+      "CONTRACT.md"
+    ]
   },
   "runs": [
     {
@@ -24,22 +31,26 @@
       "split": "dev",
       "case_count": 60,
       "records": 180,
-      "created_at": "20261126T160018Z",
-      "sha256": "278edda9bf8aabd9f5d5c034d97af7bb0c00bf09d9234c9bfd0820557a795b1c",
-      "bytes": 361896,
+      "created_at": "20261127T004559Z",
+      "git_commit": "8c79b9b2391c7937d1c425090cfec1b08218424d",
+      "git_tree": "7548c7f8f29b2a4aa01c964eac199b4da870687c",
+      "sha256": "b033fbd6113b565b1c9f36c78e27969d5f3e781b6c39c86f333faad6d05f34ce",
+      "bytes": 361290,
       "result_table": "eval/results/real/results_overall.csv",
-      "result_table_sha256": "d8e9555d4a5c35aa8fe176071adf8c65fe55c072d2afdd970133f637682291db"
+      "result_table_sha256": "0874695ab191a03852e0f11d8dc29e9b0896048afaeabebaecdd5b575028d49e"
     },
     {
       "file": "final-heldout.json",
       "split": "heldout",
-      "records": 180,
       "case_count": 60,
-      "created_at": "20261126T161237Z",
-      "sha256": "a91974bed99a557b4645a8bf8b9f18137a3fdde430d5321af235cfad823ae98a",
-      "bytes": 356620,
+      "records": 180,
+      "created_at": "20261127T005430Z",
+      "git_commit": "8c79b9b2391c7937d1c425090cfec1b08218424d",
+      "git_tree": "7548c7f8f29b2a4aa01c964eac199b4da870687c",
+      "sha256": "555b255dec0ed9602c653c231aca2044d5712f62d3589853d7e37ca1e384e026",
+      "bytes": 357033,
       "result_table": "eval/results/heldout/results_overall.csv",
-      "result_table_sha256": "9fa33550dea8373f342c10d54753faa5ad4805f1a5da2c3cbd0dc63027374509"
+      "result_table_sha256": "46c0b7a1524b9a24720d65218ed839603e535923c8a27cca29be78e9ac83adde"
     }
   ]
 }

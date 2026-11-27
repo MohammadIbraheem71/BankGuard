@@ -52,8 +52,8 @@ Source of truth for code: `eval/metrics.py` (judging and aggregation), `eval/val
 - The mock model cannot exercise some benign cases, so mock completion rates are not meaningful. Only real-model results count.
 - Repeats count as independent runs although they share a case.
 - The result files report no confidence intervals. Wilson 95% intervals for attack-success and false-positive rates are computed from the k/n counts in `docs/security_analysis.md`.
-- **The real-model tables under `eval/results/real/` (dev) and `eval/results/heldout/` (held-out) are the final runs,** judged under the current criteria (v2). Their raw records are in `eval/results/final_raw/` (`final-dev.json`, `final-heldout.json`), and re-judging those files reproduces the tables exactly. The earlier dev tables, which were judged under v1, have been replaced.
-- Scratch JSON files formerly under `eval/results/raw/` were pre-v2 or pre-final runs and are not evidence. `python eval/check_results.py --strict` fails if any JSON other than the two final raw files and their manifest exists under `eval/results/`.
+- **The real-model tables under `eval/results/real/` (dev) and `eval/results/heldout/` (held-out) are the final runs,** judged under the current criteria (v2). Their raw records are in `eval/results/final_raw/` (`final-dev.json`, `final-heldout.json`), and re-judging those files reproduces the tables exactly. Both runs record `git_commit` and `git_tree` in their metadata. The earlier dev tables, which were judged under v1, and the original frozen-tree tables have been replaced by the post-freeze rebaseline.
+- Scratch JSON files formerly under `eval/results/raw/` were pre-v2 or pre-final runs and are not evidence. `python eval/check_results.py --strict` fails if any JSON other than the two final raw files and their manifest exists under `eval/results/`, or if behavior-relevant code has changed since the recorded run.
 
 ## 4. Case fingerprints
 
@@ -147,3 +147,4 @@ dev-018 was raised as a possible ownership problem. Its source is account 2001, 
 | 2026-11-23 | `2d10a6e` | both | Judging rules and aggregation (v1). | No |
 | 2026-11-23 | (this change) | both | Criteria v2: sections 5.1 to 5.3. | No. No held-out run exists. |
 | 2026-11-26 | `9f05fbd` (the commit on branch `anum/transfer-source-audit` at the time; the M3 security commits on `origin/main` came after it and are not included) | heldout | First held-out run, real model `gpt-4o-mini`, all three modes, 180 runs. Its raw file was local and git-ignored, and its tables were later replaced by the final run. **This run locked the criteria (rule 3).** | Yes |
+| 2026-11-27 | `8c79b9b2391c7937d1c425090cfec1b08218424d` | both | Post-freeze rebaseline on current `main`, real model `gpt-4o-mini`, all three modes, 180 runs per split. Case set and criteria v2 unchanged; raw metadata records commit and tree directly, and `--strict` rejects stale behavior-relevant code. This replaced the original frozen-tree tables. | Yes (third look) |
